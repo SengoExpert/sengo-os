@@ -6,6 +6,7 @@
 <title>SENGO OS — Poste de pilotage</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 <style>
   :root{
     --ink-900:#161B1F;
@@ -83,6 +84,14 @@
     color:#fff;border-radius:7px;padding:7px 10px;font-size:12.5px;max-width:180px;min-width:0;
   }
   .prestataire-wrap select option{color:var(--ink-900);background:#fff;}
+  .onedrive-wrap{flex:none;}
+  .onedrive-btn{
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;
+    border-radius:7px;padding:7px 12px;font-size:12.5px;font-weight:600;white-space:nowrap;
+  }
+  .onedrive-btn:hover{background:rgba(255,255,255,.14);}
+  .onedrive-btn.connected{background:rgba(62,122,79,.25);border-color:rgba(62,122,79,.5);}
+  .onedrive-btn:disabled{opacity:.6;}
   .search-wrap{position:relative;width:190px;flex:none;}
   .search-wrap input{
     width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
@@ -107,6 +116,8 @@
     .nav button{padding:6px 9px;font-size:12px;white-space:nowrap;flex:none;}
     .prestataire-wrap{order:4;flex:1 1 100%;}
     .prestataire-wrap select{width:100%;max-width:none;}
+    .onedrive-wrap{order:5;flex:1 1 100%;}
+    .onedrive-btn{width:100%;}
     .search-wrap{order:2;width:auto;flex:1;}
   }
 
@@ -5534,6 +5545,14 @@ function setMobileView(v){
 
 /* ---------------------------- ACTIONS ---------------------------- */
 function openExternal(url){
+  // tel: et mailto: doivent naviguer directement (pas de nouvel onglet) : en mode "écran
+  // d'accueil" sous iOS (PWA autonome), target="_blank" sur ces schémas est peu fiable et
+  // peut ne rien déclencher du tout — la navigation directe est gérée correctement dans les
+  // deux contextes (Safari classique et écran d'accueil).
+  if(url.indexOf('tel:')===0 || url.indexOf('mailto:')===0){
+    window.location.href = url;
+    return;
+  }
   const a = document.createElement('a');
   a.href = url;
   a.target = '_blank';
@@ -5933,6 +5952,21 @@ function renderTopbar(){
         ${PRESTATAIRES.map(p=>`<option value="${p}" ${state.prestataireFilter===p?'selected':''} style="color:${PRESTATAIRE_COLORS[p]}">${p} (${prestataireCounts[p]||0})</option>`).join('')}
       </select>
     </div>
+    <div class="onedrive-wrap">
+      ${oneDriveStatus==='connected' ? `
+        <button class="onedrive-btn connected" onclick="disconnectOneDrive()" title="${oneDriveError ? 'Dernière synchro en erreur : '+esc(oneDriveError) : (oneDriveLastSync ? 'Dernière synchro : '+oneDriveLastSync.toLocaleTimeString('fr-FR') : 'Connecté')}">
+          ${oneDriveError ? '⚠️' : '☁️'} OneDrive
+        </button>
+      ` : oneDriveStatus==='connecting' ? `
+        <button class="onedrive-btn" disabled>☁️ Connexion…</button>
+      ` : oneDriveStatus==='unavailable' ? `
+        <button class="onedrive-btn" disabled title="Bibliothèque OneDrive non chargée — vérifiez votre connexion internet, puis rechargez la page.">☁️ OneDrive indisponible</button>
+      ` : `
+        <button class="onedrive-btn" onclick="connectOneDrive()" title="${oneDriveStatus==='error' ? esc(oneDriveError) : 'Connecter OneDrive pour sauvegarder automatiquement toutes vos données'}">
+          ${oneDriveStatus==='error' ? '⚠️ Réessayer' : '☁️ Connecter OneDrive'}
+        </button>
+      `}
+    </div>
     <div class="search-wrap">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input placeholder="Rechercher…" value="${esc(state.searchQuery)}"
@@ -6181,8 +6215,8 @@ function renderContacts(co, contacts){
           </div>
         </div>
         <div class="ct-coords">
-          ${k.tel && k.tel!=='—' ? `<a class="ct-link" href="tel:${esc(k.tel)}" target="_blank" rel="noopener">📞 ${esc(k.tel)}</a>`:''}
-          ${k.email ? `<a class="ct-link" href="mailto:${esc(k.email)}" target="_blank" rel="noopener">✉️ ${esc(k.email)}</a>`:''}
+          ${k.tel && k.tel!=='—' ? `<a class="ct-link" href="tel:${esc(k.tel)}">📞 ${esc(k.tel)}</a>`:''}
+          ${k.email ? `<a class="ct-link" href="mailto:${esc(k.email)}">✉️ ${esc(k.email)}</a>`:''}
         </div>
         ${k.notes ? `<div class="ct-notes">${esc(k.notes)}</div>` : ''}
       </div>`).join('') : `<div class="empty-queue">Aucun contact enregistré.</div>`}
@@ -6793,8 +6827,8 @@ function renderContactsPage(){
               <td>${esc(k.fonction)||'—'}</td>
               <td>${k._co? esc(k._co.nom) : '—'}</td>
               <td><span class="ct-role ${k.role}" style="display:inline-block;">${esc(ROLE_LABELS[k.role]||k.role)}</span></td>
-              <td class="mono">${k.tel && k.tel!=='—' ? `<a class="ct-link" href="tel:${esc(k.tel)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(k.tel)}</a>` : '—'}</td>
-              <td>${k.email ? `<a class="ct-link" href="mailto:${esc(k.email)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(k.email)}</a>` : '—'}</td>
+              <td class="mono">${k.tel && k.tel!=='—' ? `<a class="ct-link" href="tel:${esc(k.tel)}" onclick="event.stopPropagation()">${esc(k.tel)}</a>` : '—'}</td>
+              <td>${k.email ? `<a class="ct-link" href="mailto:${esc(k.email)}" onclick="event.stopPropagation()">${esc(k.email)}</a>` : '—'}</td>
               <td><button class="btn small primary" onclick="event.stopPropagation();editContactFrom('${k.companyId}','${k.id}')">✎ Modifier</button></td>
             </tr>`).join('')}
           ${!list.length ? `<tr><td colspan="7"><div class="empty-queue" style="padding:16px;">Aucun contact ne correspond à ces filtres.</div></td></tr>` : ''}
@@ -7525,7 +7559,7 @@ function renderTerrainView(){
             </div>
             <div class="ts-addr">${esc(co.adresse)}</div>
             <div class="ts-actions">
-              ${contact && contact.tel && contact.tel!=='—' ? `<a class="btn small" href="tel:${esc(contact.tel)}" target="_blank" rel="noopener">📞 ${esc(contact.prenom)}</a>` : ''}
+              ${contact && contact.tel && contact.tel!=='—' ? `<a class="btn small" href="tel:${esc(contact.tel)}">📞 ${esc(contact.prenom)}</a>` : ''}
               <a class="btn small" href="${mapUrl}" target="_blank" rel="noopener">🧭 Itinéraire</a>
               <button class="btn small" onclick="selectCompany('${co.id}');state.activeNav='aujourdhui';render()">Voir le compte</button>
               ${s.statut!=='terminee' ? `<button class="btn small primary" onclick="openFinish('${s.id}')">✓ Terminer l'étape</button>` : ''}
@@ -7772,6 +7806,7 @@ function render(){
   }
 
   window.scrollTo(0, savedScrollY);
+  scheduleAutoSave();
 }
 
 /* Sur mobile, quand le clavier s'ouvre, la fenêtre modale (position fixe) doit suivre
@@ -7811,7 +7846,188 @@ function computeStartingCompanyId(){
 }
 state.selectedCompanyId = computeStartingCompanyId();
 
-render();
+/* ======================================================================
+   SYNCHRONISATION ONEDRIVE — sauvegarde automatique de toutes les données
+   (entreprises, contacts, tâches, notes, opportunités, documents, photos)
+   dans un fichier privé du dossier applicatif OneDrive de l'utilisateur.
+   ====================================================================== */
+const ONEDRIVE_CLIENT_ID = '77584d42-e0b0-4718-9cdd-73c99ce222c3';
+const ONEDRIVE_SCOPES = ['Files.ReadWrite.AppFolder'];
+const ONEDRIVE_FILENAME = 'sengo-os-data.json';
+
+let msalInstance = null;
+try{
+  if(typeof msal !== 'undefined'){
+    msalInstance = new msal.PublicClientApplication({
+      auth: {
+        clientId: ONEDRIVE_CLIENT_ID,
+        authority: 'https://login.microsoftonline.com/consumers',
+        redirectUri: window.location.href.split('?')[0].split('#')[0],
+      },
+      cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false },
+    });
+  }
+}catch(e){
+  console.error('Initialisation MSAL impossible', e);
+}
+
+let oneDriveStatus = msalInstance ? 'disconnected' : 'unavailable'; // unavailable | disconnected | connecting | connected | error
+let oneDriveLastSync = null;
+let oneDriveError = '';
+
+function buildSnapshot(){
+  return {
+    version: 1, savedAt: new Date().toISOString(),
+    companies: DB.companies, contacts: DB.contacts, tasks: DB.tasks,
+    notes: DB.notes, opportunities: DB.opportunities, documents: DB.documents,
+    tournees: DB.tournees,
+  };
+}
+function applySnapshot(snap){
+  if(!snap) return;
+  if(snap.companies) DB.companies = snap.companies;
+  if(snap.contacts) DB.contacts = snap.contacts;
+  if(snap.tasks) DB.tasks = snap.tasks;
+  if(snap.notes) DB.notes = snap.notes;
+  if(snap.opportunities) DB.opportunities = snap.opportunities;
+  if(snap.documents) DB.documents = snap.documents;
+  if(snap.tournees) DB.tournees = snap.tournees;
+  DB.companies.forEach(c => { c._deptCache = undefined; });
+}
+
+async function getGraphToken(){
+  if(!msalInstance) throw new Error('OneDrive indisponible (bibliothèque non chargée).');
+  const account = msalInstance.getActiveAccount();
+  if(!account) throw new Error('Non connecté.');
+  try{
+    const resp = await msalInstance.acquireTokenSilent({scopes: ONEDRIVE_SCOPES, account});
+    return resp.accessToken;
+  }catch(e){
+    const resp = await msalInstance.acquireTokenPopup({scopes: ONEDRIVE_SCOPES});
+    return resp.accessToken;
+  }
+}
+
+async function downloadFromOneDrive(){
+  const token = await getGraphToken();
+  const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/special/approot:/${ONEDRIVE_FILENAME}:/content`, {
+    headers: { 'Authorization': 'Bearer ' + token },
+  });
+  if(res.status === 404) return null;
+  if(!res.ok) throw new Error('Lecture OneDrive échouée (' + res.status + ')');
+  return await res.json();
+}
+
+async function uploadToOneDrive(jsonString){
+  const token = await getGraphToken();
+  const createRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/special/approot:/${ONEDRIVE_FILENAME}:/createUploadSession`, {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace' } }),
+  });
+  if(!createRes.ok) throw new Error('Préparation de l\'envoi OneDrive échouée (' + createRes.status + ')');
+  const { uploadUrl } = await createRes.json();
+
+  const bytes = new TextEncoder().encode(jsonString);
+  const chunkSize = 5 * 1024 * 1024; // 5 Mo, multiple de 320 Kio requis par l'API Graph
+  for(let start = 0; start < bytes.length; start += chunkSize){
+    const end = Math.min(start + chunkSize, bytes.length);
+    const chunk = bytes.slice(start, end);
+    const res = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Length': String(chunk.length),
+        'Content-Range': `bytes ${start}-${end-1}/${bytes.length}`,
+      },
+      body: chunk,
+    });
+    if(!res.ok && res.status !== 201 && res.status !== 202){
+      throw new Error('Envoi OneDrive échoué (' + res.status + ')');
+    }
+  }
+}
+
+async function saveToOneDrive(){
+  if(oneDriveStatus !== 'connected') return;
+  try{
+    await uploadToOneDrive(JSON.stringify(buildSnapshot()));
+    oneDriveLastSync = new Date();
+    oneDriveError = '';
+  }catch(e){
+    console.error('Sauvegarde OneDrive échouée', e);
+    oneDriveError = e.message || String(e);
+  }
+}
+
+let __autoSaveTimer = null;
+function scheduleAutoSave(){
+  if(oneDriveStatus !== 'connected') return;
+  clearTimeout(__autoSaveTimer);
+  __autoSaveTimer = setTimeout(() => { saveToOneDrive().then(render); }, 2000);
+}
+
+async function connectOneDrive(){
+  if(!msalInstance){
+    toast('OneDrive indisponible pour le moment (bibliothèque non chargée — vérifiez votre connexion).');
+    return;
+  }
+  oneDriveStatus = 'connecting';
+  oneDriveError = '';
+  render();
+  try{
+    const loginResp = await msalInstance.loginPopup({ scopes: ONEDRIVE_SCOPES });
+    msalInstance.setActiveAccount(loginResp.account);
+    const snap = await downloadFromOneDrive();
+    if(snap){
+      applySnapshot(snap);
+      state.selectedCompanyId = computeStartingCompanyId();
+      toast('Données chargées depuis OneDrive.');
+    } else {
+      toast('OneDrive connecté — première sauvegarde en cours…');
+    }
+    oneDriveStatus = 'connected';
+    if(!snap) await saveToOneDrive();
+  }catch(e){
+    console.error('Connexion OneDrive échouée', e);
+    oneDriveStatus = 'error';
+    oneDriveError = e.message || String(e);
+    toast('Connexion OneDrive échouée.');
+  }
+  render();
+}
+
+function disconnectOneDrive(){
+  const account = msalInstance.getActiveAccount();
+  if(account) msalInstance.setActiveAccount(null);
+  oneDriveStatus = 'disconnected';
+  toast('Déconnecté de OneDrive (les données restent enregistrées en ligne).');
+  render();
+}
+
+async function initOneDrive(){
+  try{
+    if(!msalInstance) return; // bibliothèque non chargée : l'app démarre normalement, sans synchro
+    await msalInstance.initialize();
+    const accounts = msalInstance.getAllAccounts();
+    if(accounts.length){
+      msalInstance.setActiveAccount(accounts[0]);
+      oneDriveStatus = 'connecting';
+      render();
+      const snap = await downloadFromOneDrive();
+      applySnapshot(snap);
+      state.selectedCompanyId = computeStartingCompanyId();
+      oneDriveStatus = 'connected';
+    }
+  }catch(e){
+    console.error('Restauration OneDrive échouée', e);
+    oneDriveStatus = 'error';
+    oneDriveError = e.message || String(e);
+  }finally{
+    render();
+  }
+}
+
+initOneDrive();
 </script>
 </body>
 </html>
