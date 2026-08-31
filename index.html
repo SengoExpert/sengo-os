@@ -101,7 +101,7 @@
   .search-wrap input::placeholder{color:#8D958F;}
   .search-wrap svg{position:absolute;left:9px;top:8px;opacity:.6;}
   .search-results{
-    position:absolute;top:36px;left:0;width:340px;background:var(--panel);
+    position:absolute;top:36px;left:0;width:340px;max-width:calc(100vw - 24px);background:var(--panel);
     border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.18);
     padding:6px;color:var(--ink-900);max-height:400px;overflow:auto;
   }
@@ -118,7 +118,8 @@
     .prestataire-wrap{order:4;flex:1 1 100%;}
     .prestataire-wrap select{width:100%;max-width:none;}
     .onedrive-wrap{order:2;flex:none;}
-    .search-wrap{order:2;width:auto;flex:1;}
+    .search-wrap{order:2;width:auto;flex:1;min-width:0;}
+    .search-results{left:auto;right:0;width:calc(100vw - 24px);}
   }
 
   /* ===== Verrou d'accès ===== */
@@ -393,6 +394,10 @@
     background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);font-size:16px;cursor:pointer;
   }
   .photo-lightbox-close:hover{background:rgba(255,255,255,.25);}
+  .photo-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(90px, 1fr));gap:10px;}
+  .pg-item{cursor:pointer;}
+  .pg-item img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block;}
+  .pg-caption{font-size:10.5px;color:var(--ink-500);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .note-add textarea{width:100%;border:1px solid var(--line);border-radius:7px;padding:10px;font-size:13px;min-height:56px;resize:vertical;}
   .note-add{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
   .note-add select{border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:12.5px;background:#fff;align-self:flex-start;}
@@ -5537,6 +5542,7 @@ let state = {
   pendingConfirm: null, // {message, onConfirmFn, payload} — confirmation interne (pas de confirm() natif)
   lightboxPhotoId: null, // id de la photo affichée en grand, le cas échéant
   ocrStatus: null, // 'scanning' pendant la lecture d'une carte de visite
+  photoGalleryCompanyId: null, // id de l'entreprise dont la galerie photo est ouverte, le cas échéant
   editingTaskId: null, // id de la tâche en cours de modification (fenêtre dédiée)
   oppFilters: {statut:'tous', potentiel:'tous', q:'', companyId:null},
   oppExpandedId: null,
@@ -5783,6 +5789,24 @@ function findNotePhoto(photoId){
   }
   return null;
 }
+function companyPhotos(cid){
+  const out = [];
+  DB.notes.filter(n=>n.companyId===cid).forEach(n => {
+    (n.photos||[]).forEach(p => out.push({...p, noteDate: n.date}));
+  });
+  return out.sort((a,b) => (b.noteDate||'').localeCompare(a.noteDate||''));
+}
+function countCompanyPhotos(cid){
+  return companyPhotos(cid).length;
+}
+function openPhotoGallery(cid){
+  state.photoGalleryCompanyId = cid;
+  render();
+}
+function closePhotoGallery(){
+  state.photoGalleryCompanyId = null;
+  render();
+}
 let editingPhotoTitleId = null;
 function saveNotePhotoTitle(photoId, value){
   const p = findNotePhoto(photoId);
@@ -5902,6 +5926,7 @@ function updatePotentiel(cid, value){
 let addingCompanyOpen = false;
 function toggleAddCompany(){
   addingCompanyOpen = !addingCompanyOpen;
+  if(!addingCompanyOpen) pendingScanPhotoForNewCompany = null;
   render();
 }
 function renderInlineCompanyForm(){
@@ -5989,6 +6014,15 @@ function submitNewCompany(){
     resume:'', watch:[], strategie:'',
   };
   DB.companies.push(co);
+
+  if(pendingScanPhotoForNewCompany){
+    DB.notes.push({
+      id: 'n'+(DB.notes.length+1)+'-'+Math.random().toString(36).slice(2,5),
+      companyId: id, contactId:null, opportunityId:null,
+      date: todayStr, texte: 'Carte de visite scannée.', type: 'note', photos: [pendingScanPhotoForNewCompany],
+    });
+    pendingScanPhotoForNewCompany = null;
+  }
 
   const ctPrenom = document.getElementById('nco-ct-prenom').value.trim();
   const ctNom = document.getElementById('nco-ct-nom').value.trim();
@@ -6271,6 +6305,7 @@ function renderCockpit(){
 
 function renderCoHeader(co){
   const potClass = co.potentiel==='fort'?'potentiel-fort':co.potentiel==='moyen'?'potentiel-moyen':'potentiel-faible';
+  const nbPhotos = countCompanyPhotos(co.id);
   return `
   <div class="card">
     <div class="co-header">
@@ -6287,6 +6322,7 @@ function renderCoHeader(co){
         <button class="btn" onclick="emailPrimaryContact('${co.id}')">✉️ Email</button>
         <button class="btn" onclick="toggleAddTask('${co.id}')">+ Tâche</button>
         <button class="btn primary" onclick="document.getElementById('note-block').scrollIntoView({behavior:'smooth'})">+ Note</button>
+        ${nbPhotos ? `<button class="btn" onclick="openPhotoGallery('${co.id}')" title="Toutes les photos de cette entreprise">📷 Photos (${nbPhotos})</button>` : ''}
       </div>
     </div>
     ${renderInlineTaskForm(co.id)}
@@ -7891,9 +7927,38 @@ function renderEditTaskModal(){
   </div>`;
 }
 
+function renderPhotoGalleryModal(){
+  const co = byId(DB.companies, state.photoGalleryCompanyId);
+  if(!co) return '';
+  const photos = companyPhotos(co.id);
+  return `
+  <div class="modal-overlay" onpointerdown="onOverlayPointerDown(event)" onpointerup="onOverlayPointerUp(event, closePhotoGallery)">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="mh-label">${esc(co.nom)}</div>
+        <div class="mh-title">Photos (${photos.length})</div>
+      </div>
+      <div class="modal-body">
+        ${photos.length ? `
+        <div class="photo-gallery-grid">
+          ${photos.map(p => `
+            <div class="pg-item" onclick="openPhotoLightbox('${p.id}')">
+              <img src="${p.dataUrl}" alt="${esc(p.titre||p.name||'')}">
+              ${p.titre ? `<div class="pg-caption">${esc(p.titre)}</div>` : ''}
+            </div>`).join('')}
+        </div>` : `<div class="empty-queue">Aucune photo pour cette entreprise pour le moment.</div>`}
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="closePhotoGallery()">Fermer</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderModal(){
   if(state.editingTaskId) return renderEditTaskModal();
   if(state.lightboxPhotoId) return renderPhotoLightbox();
+  if(state.photoGalleryCompanyId) return renderPhotoGalleryModal();
   if(state.pendingConfirm) return renderConfirmModal();
   if(!state.showFinishModal) return '';
   const task = byId(DB.tasks, state.finishingTaskId);
@@ -8171,11 +8236,23 @@ function parseBusinessCardText(text){
 
 let ocrScanTarget = null; // {mode:'new'|'existing', companyId}
 function triggerScanBusinessCard(mode, companyId){
+  if(state.ocrStatus === 'scanning'){
+    toast('Lecture déjà en cours — patientez quelques secondes.');
+    return;
+  }
   ocrScanTarget = {mode, companyId};
   const input = document.getElementById('ocr-scan-input');
   if(input) input.click();
 }
 let lastOcrRawText = '';
+function readFileAsDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 async function handleBusinessCardScan(input){
   const file = input.files && input.files[0];
   input.value = '';
@@ -8187,9 +8264,15 @@ async function handleBusinessCardScan(input){
   lastOcrRawText = '';
   render();
   try{
+    // La photo est enregistrée dès maintenant, indépendamment du résultat de la lecture —
+    // même si le texte n'est pas reconnu, la photo reste disponible dans la galerie.
+    const dataUrl = await readFileAsDataUrl(file);
+    const photo = { id: 'ph'+Date.now()+Math.random().toString(36).slice(2,5), dataUrl, name: file.name, titre: '' };
+    savePhotoForScan(target, photo);
+
     const loaded = await loadOcrLibrary();
     if(!loaded){
-      toast("Lecture de carte indisponible pour le moment (vérifiez votre connexion), réessayez.");
+      toast("Lecture du texte indisponible pour le moment (vérifiez votre connexion) — la photo a quand même été enregistrée.");
       state.ocrStatus = null;
       render();
       return;
@@ -8200,14 +8283,28 @@ async function handleBusinessCardScan(input){
     const nbTrouves = Object.values(fields).filter(Boolean).length;
     state.ocrStatus = null;
     applyOcrFieldsToForm(target, fields); // gère son propre rendu + remplissage des champs : doit rester le tout dernier appel
-    toast(nbTrouves ? 'Carte lue — vérifiez les informations proposées avant d\'enregistrer.' : 'Texte lu mais rien reconnu automatiquement — le texte brut est affiché sous le formulaire, à reporter à la main.');
+    toast(nbTrouves ? 'Carte lue — vérifiez les informations proposées avant d\'enregistrer.' : 'Photo enregistrée, mais rien reconnu automatiquement — le texte brut est affiché sous le formulaire.');
     return; // important : ne pas retomber sur le render() ci-dessous, il effacerait les champs qu'on vient de remplir
   }catch(e){
     console.error('Lecture de carte échouée', e);
-    toast('La lecture de la carte a échoué. Réessayez avec une photo plus nette.');
+    toast('La lecture du texte a échoué, mais la photo a été enregistrée. Réessayez avec une photo plus nette si besoin.');
   }
   state.ocrStatus = null;
   render();
+}
+let pendingScanPhotoForNewCompany = null;
+function savePhotoForScan(target, photo){
+  if(target.mode === 'existing' && target.companyId){
+    DB.notes.push({
+      id: 'n'+(DB.notes.length+1)+'-'+Math.random().toString(36).slice(2,5),
+      companyId: target.companyId, contactId:null, opportunityId:null,
+      date: todayStr, texte: 'Carte de visite scannée.', type: 'note', photos: [photo],
+    });
+  } else if(target.mode === 'new'){
+    // L'entreprise n'existe pas encore à cet instant : la photo est rattachée
+    // dès la validation du formulaire, dans submitNewCompany().
+    pendingScanPhotoForNewCompany = photo;
+  }
 }
 function applyOcrFieldsToForm(target, fields){
   if(target.mode === 'new'){
@@ -8457,6 +8554,10 @@ function startApp(){
   state.selectedCompanyId = computeStartingCompanyId();
   render();
   initOneDrive();
+  // Précharge la bibliothèque OCR en tâche de fond, sans bloquer l'affichage, pour que
+  // le premier scan de carte de visite soit déjà rapide (sinon le premier essai peut
+  // sembler ne rien faire le temps du téléchargement, qui ne se refait pas ensuite).
+  loadOcrLibrary().catch(()=>{});
 }
 
 /* ---------------------------- VERROU D'ACCÈS ----------------------------
