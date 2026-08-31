@@ -8689,8 +8689,11 @@ async function reloadFromOneDrive(){
   oneDriveStatus = 'connecting';
   render();
   try{
+    // Important : on annule toute sauvegarde encore en attente, mais on ne pousse JAMAIS la
+    // version locale avant d'avoir récupéré la dernière version distante — sinon on écraserait
+    // systématiquement les changements faits sur l'autre appareil avant même d'aller les
+    // chercher, ce qui empêchait toute synchronisation de fonctionner dans les deux sens.
     clearTimeout(__autoSaveTimer);
-    await saveToOneDrive(); // met d'abord en sécurité ce qui vient d'être modifié ici
     const snap = await downloadFromOneDrive();
     if(snap){
       applySnapshot(snap);
