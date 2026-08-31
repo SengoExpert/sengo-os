@@ -4,11 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="color-scheme" content="light">
 <title>SENGO OS — Poste de pilotage</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital@0;1&display=swap" rel="stylesheet">
 <style>
   :root{
+    color-scheme: light; /* empêche le navigateur d'appliquer ses propres couleurs de mode sombre
+      aux éléments natifs (suggestions de champ, menus déroulants...) quand l'appareil est en
+      mode sombre — sans ça, ces éléments peuvent devenir illisibles (texte clair sur fond clair). */
     --ink-900:#161B1F;
     --ink-700:#333C42;
     --ink-500:#5B6670;
