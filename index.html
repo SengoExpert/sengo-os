@@ -8626,8 +8626,13 @@ async function getGraphToken(){
 
 async function downloadFromOneDrive(){
   const token = await getGraphToken();
-  const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/special/approot:/${ONEDRIVE_FILENAME}:/content`, {
+  // cache:'no-store' + paramètre anti-cache : sans ça, le navigateur (surtout Safari mobile)
+  // peut renvoyer une ancienne version mise en cache au lieu d'aller vérifier sur le serveur —
+  // ce qui donnait l'impression qu'une modification faite sur un autre appareil "ne remontait
+  // jamais", même après un rechargement manuel.
+  const res = await fetch(`https://graph.microsoft.com/v1.0/me/drive/special/approot:/${ONEDRIVE_FILENAME}:/content?_=${Date.now()}`, {
     headers: { 'Authorization': 'Bearer ' + token },
+    cache: 'no-store',
   });
   if(res.status === 404) return null;
   if(!res.ok) throw new Error('Lecture OneDrive échouée (' + res.status + ')');
