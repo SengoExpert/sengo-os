@@ -6507,8 +6507,12 @@ function renderEntreprise(co){
     <h2>Entreprise</h2>
     <div class="field-row"><label>Raison sociale</label><input value="${esc(co.nom)}" onblur="updateCompanyField('${co.id}','nom',this.value)"></div>
     <div class="field-row"><label>Groupe (si multi-site)</label>
-      <input list="groupe-suggestions" value="${esc(co.groupe||'')}" placeholder="Nom du groupe — laisser vide si site unique" onblur="updateCompanyField('${co.id}','groupe',this.value)">
-      <datalist id="groupe-suggestions">${groupesConnus.map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
+      <input type="text" value="${esc(co.groupe||'')}" placeholder="Nom du groupe — laisser vide si site unique" onblur="updateCompanyField('${co.id}','groupe',this.value)">
+      ${groupesConnus.length ? `
+      <select onchange="if(this.value){updateCompanyField('${co.id}','groupe',this.value);render();}this.selectedIndex=0;" style="margin-top:4px;">
+        <option value="">↳ ou choisir un groupe déjà existant…</option>
+        ${groupesConnus.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join('')}
+      </select>` : ''}
     </div>
     <div class="field-row"><label>Secteur</label>
       <select onchange="updateCompanyField('${co.id}','secteur',this.value)">
