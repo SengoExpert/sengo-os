@@ -83,14 +83,15 @@
     color:#fff;border-radius:7px;padding:7px 10px;font-size:12.5px;max-width:180px;min-width:0;
   }
   .prestataire-wrap select option{color:var(--ink-900);background:#fff;}
-  .onedrive-wrap{flex:none;display:flex;gap:6px;}
+  .onedrive-wrap{flex:none;}
   .onedrive-btn{
-    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;
-    border-radius:7px;padding:7px 12px;font-size:12.5px;font-weight:600;white-space:nowrap;
+    width:32px;height:32px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);font-size:14px;line-height:1;
+    filter:grayscale(1) opacity(.7);
   }
-  .onedrive-btn:hover{background:rgba(255,255,255,.14);}
-  .onedrive-btn.connected{background:rgba(62,122,79,.25);border-color:rgba(62,122,79,.5);}
-  .onedrive-btn:disabled{opacity:.6;}
+  .onedrive-btn:hover{background:rgba(255,255,255,.2);}
+  .onedrive-btn.connected{background:#fff;border-color:#fff;filter:none;}
+  .onedrive-btn:disabled{opacity:.5;cursor:default;}
   .search-wrap{position:relative;width:190px;flex:none;}
   .search-wrap input{
     width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
@@ -115,8 +116,7 @@
     .nav button{padding:6px 9px;font-size:12px;white-space:nowrap;flex:none;}
     .prestataire-wrap{order:4;flex:1 1 100%;}
     .prestataire-wrap select{width:100%;max-width:none;}
-    .onedrive-wrap{order:5;flex:1 1 100%;}
-    .onedrive-btn{flex:1;}
+    .onedrive-wrap{order:2;flex:none;}
     .search-wrap{order:2;width:auto;flex:1;}
   }
 
@@ -5824,6 +5824,107 @@ function updatePotentiel(cid, value){
   render();
 }
 
+/* Création / suppression d'entreprise */
+let addingCompanyOpen = false;
+function toggleAddCompany(){
+  addingCompanyOpen = !addingCompanyOpen;
+  render();
+}
+function renderInlineCompanyForm(){
+  if(!addingCompanyOpen) return '';
+  const secteurs = Object.keys(SECTOR_COLORS);
+  const regionsKnown = Object.values(DEPT_REGION_MAP).filter((v,i,a)=>a.indexOf(v)===i).sort();
+  return `
+  <div class="card">
+    <h2>Nouvelle entreprise</h2>
+    <div class="inline-form">
+      <input id="nco-nom" placeholder="Raison sociale *" />
+      <div class="grid2">
+        <select id="nco-secteur">
+          <option value="">Secteur…</option>
+          ${secteurs.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('')}
+        </select>
+        <input id="nco-activite" placeholder="Activité" />
+      </div>
+      <div class="grid2">
+        <input id="nco-ville" placeholder="Ville" />
+        <select id="nco-region">
+          <option value="">Région…</option>
+          ${regionsKnown.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="grid2">
+        <input id="nco-tel" placeholder="Téléphone" />
+        <input id="nco-site" placeholder="Site web" />
+      </div>
+      <div class="grid2">
+        <select id="nco-prestataire">
+          ${PRESTATAIRES.map(p=>`<option value="${p}" ${p==='SENGO EXPERT'?'selected':''}>${p}</option>`).join('')}
+        </select>
+        <select id="nco-potentiel">
+          <option value="moyen" selected>Potentiel moyen</option>
+          <option value="fort">Potentiel fort</option>
+          <option value="faible">Potentiel faible</option>
+        </select>
+      </div>
+      <div class="inline-form-actions">
+        <button class="btn" onclick="toggleAddCompany()">Annuler</button>
+        <button class="btn primary" onclick="submitNewCompany()">Créer l'entreprise</button>
+      </div>
+    </div>
+  </div>`;
+}
+function submitNewCompany(){
+  const nom = document.getElementById('nco-nom').value.trim();
+  if(!nom){ toast('La raison sociale est requise.'); return; }
+  const prestataire = document.getElementById('nco-prestataire').value;
+  const id = 'new-'+Date.now()+'-'+Math.random().toString(36).slice(2,5);
+  const co = {
+    id, nom, secteur: document.getElementById('nco-secteur').value || 'Autre',
+    activite: document.getElementById('nco-activite').value.trim(),
+    adresse:'', ville: document.getElementById('nco-ville').value.trim(),
+    region: document.getElementById('nco-region').value || null,
+    tel: document.getElementById('nco-tel').value.trim(),
+    site: document.getElementById('nco-site').value.trim(),
+    partenaire: prestataire==='SENGO EXPERT' ? 'SENGO Expert direct' : prestataire,
+    prestataire, potentiel: document.getElementById('nco-potentiel').value,
+    effectif:null, ca:null, lat:null, lon:null,
+    resume:'', watch:[], strategie:'',
+  };
+  DB.companies.push(co);
+  addingCompanyOpen = false;
+  toast('Entreprise créée.');
+  selectCompany(id);
+  state.activeNav = 'aujourdhui';
+  render();
+}
+function deleteCompany(cid){
+  const co = byId(DB.companies, cid);
+  if(!co) return;
+  const nbTasks = DB.tasks.filter(t=>t.companyId===cid).length;
+  const nbContacts = DB.contacts.filter(k=>k.companyId===cid).length;
+  const nbOpps = DB.opportunities.filter(o=>o.companyId===cid).length;
+  state.pendingConfirm = {
+    message: `Supprimer définitivement « ${co.nom} » ? Cela supprimera aussi ${nbTasks} tâche(s), ${nbContacts} contact(s), ${nbOpps} opportunité(s), ainsi que ses notes et documents.`,
+    onConfirmFn: 'performDeleteCompany',
+    payload: cid,
+  };
+  render();
+}
+function performDeleteCompany(cid){
+  DB.tasks = DB.tasks.filter(t=>t.companyId!==cid);
+  DB.contacts = DB.contacts.filter(k=>k.companyId!==cid);
+  DB.opportunities = DB.opportunities.filter(o=>o.companyId!==cid);
+  DB.notes = DB.notes.filter(n=>n.companyId!==cid);
+  DB.documents = DB.documents.filter(d=>d.companyId!==cid);
+  DB.tournees.forEach(t => { t.companyIds = t.companyIds.filter(id=>id!==cid); });
+  const idx = DB.companies.findIndex(c=>c.id===cid);
+  if(idx>=0) DB.companies.splice(idx,1);
+  toast('Entreprise supprimée.');
+  state.selectedCompanyId = computeStartingCompanyId();
+  render();
+}
+
 function changeOppStatus(oid, value){
   const opp = byId(DB.opportunities, oid);
   opp.statut = value;
@@ -5953,21 +6054,14 @@ function renderTopbar(){
     </div>
     <div class="onedrive-wrap">
       ${oneDriveStatus==='connected' ? `
-        <button class="onedrive-btn connected" onclick="disconnectOneDrive()" title="${oneDriveError ? 'Dernière synchro en erreur : '+esc(oneDriveError) : (oneDriveLastSync ? 'Dernière synchro : '+oneDriveLastSync.toLocaleTimeString('fr-FR') : 'Connecté')}">
-          ${oneDriveError ? '⚠️' : '☁️'} OneDrive
-        </button>
+        <button class="onedrive-btn connected" onclick="disconnectOneDrive()" title="${oneDriveError ? 'Dernière synchro en erreur : '+esc(oneDriveError) : (oneDriveLastSync ? 'OneDrive connecté — dernière synchro : '+oneDriveLastSync.toLocaleTimeString('fr-FR') : 'OneDrive connecté')}">☁️</button>
       ` : oneDriveStatus==='connecting' ? `
-        <button class="onedrive-btn" disabled>☁️ Connexion…</button>
+        <button class="onedrive-btn" disabled title="Connexion à OneDrive en cours…">☁️</button>
       ` : oneDriveStatus==='unavailable' ? `
-        <button class="onedrive-btn" disabled title="Bibliothèque OneDrive non chargée — vérifiez votre connexion internet, puis rechargez la page.">☁️ OneDrive indisponible</button>
+        <button class="onedrive-btn" disabled title="OneDrive indisponible — vérifiez votre connexion internet, puis rechargez la page.">☁️</button>
       ` : `
-        <button class="onedrive-btn" onclick="connectOneDrive()" title="${oneDriveStatus==='error' ? esc(oneDriveError) : 'Connecter OneDrive pour sauvegarder automatiquement toutes vos données'}">
-          ${oneDriveStatus==='error' ? '⚠️ Réessayer' : '☁️ Connecter OneDrive'}
-        </button>
+        <button class="onedrive-btn" onclick="connectOneDrive()" title="${oneDriveStatus==='error' ? 'Erreur de connexion — cliquer pour réessayer : '+esc(oneDriveError) : 'OneDrive déconnecté — cliquer pour connecter'}">☁️</button>
       `}
-      <button class="onedrive-btn" onclick="exportDataBackup()" title="Télécharger une sauvegarde de toutes les données, pour changer de compte OneDrive sans rien perdre">⬇️ Exporter</button>
-      <button class="onedrive-btn" onclick="triggerImportBackup()" title="Recharger une sauvegarde téléchargée précédemment">⬆️ Importer</button>
-      <input type="file" id="import-backup-input" accept="application/json" style="display:none;" onchange="importDataBackup(this)">
     </div>
     <div class="search-wrap">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
@@ -6197,6 +6291,9 @@ function renderEntreprise(co){
       </select>
     </div>
     <div class="field-row"><label>Stratégie de compte</label><textarea onblur="updateCompanyField('${co.id}','strategie',this.value)">${esc(co.strategie)}</textarea></div>
+    <div style="margin-top:12px;text-align:right;">
+      <button class="btn danger-ghost" onclick="deleteCompany('${co.id}')">🗑 Supprimer l'entreprise</button>
+    </div>
   </div>`;
 }
 
@@ -6670,10 +6767,10 @@ function renderEntreprisesPage(){
         <div class="co-name" style="font-size:19px;">Entreprises</div>
         <div style="font-size:12.5px;color:var(--ink-500);">${list.length} sur ${DB.companies.length} — triez une colonne en cliquant sur son en-tête</div>
       </div>
-      <div style="font-size:11.5px;color:var(--ink-500);max-width:340px;text-align:right;">
-        Import de votre liste de prospects (Excel) : envoyez le fichier, il sera intégré ici automatiquement avec les mêmes colonnes.
-      </div>
+      <button class="btn primary" onclick="toggleAddCompany()">${addingCompanyOpen?'Annuler':'+ Créer une entreprise'}</button>
     </div>
+
+    ${renderInlineCompanyForm()}
 
     <div class="card ent-filters">
       <input type="text" placeholder="Rechercher une entreprise…" value="${esc(f.q)}" oninput="state.entFilters.q=this.value;render()" data-focus-key="ent-search">
@@ -7517,6 +7614,7 @@ function confirmYes(){
   if(!pc) return;
   state.pendingConfirm = null;
   if(pc.onConfirmFn === 'performDeleteTournee') performDeleteTournee(pc.payload);
+  if(pc.onConfirmFn === 'performDeleteCompany') performDeleteCompany(pc.payload);
   render();
 }
 
