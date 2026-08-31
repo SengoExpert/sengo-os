@@ -587,12 +587,20 @@
     box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:200;opacity:0;pointer-events:none;transition:.25s;
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
+  .ptr-indicator{
+    position:fixed;left:50%;top:0;transform:translate(-50%,-100%);
+    background:var(--brand-ink);color:#fff;padding:7px 16px;border-radius:0 0 12px 12px;
+    font-size:12.5px;font-weight:600;z-index:500;pointer-events:none;opacity:0;
+    transition:transform .2s ease-out, opacity .2s ease-out;
+  }
+  .ptr-indicator.dragging{transition:none;}
 </style>
 </head>
 <body>
 
 <div id="app"></div>
 <div id="toast" class="toast"></div>
+<div id="ptr-indicator" class="ptr-indicator">↓ Tirer pour actualiser</div>
 
 <script>
 /* =========================================================================
@@ -8673,6 +8681,7 @@ async function saveToOneDrive(){
   try{
     await uploadToOneDrive(JSON.stringify(buildSnapshot()));
     oneDriveLastSync = new Date();
+    toast('✓ Enregistré', 1400); // toast() ne déclenche pas de rendu — pas de risque de boucle
     if(oneDriveError){ oneDriveError = ''; render(); } // n'affiche à nouveau que si une erreur précédente doit être effacée
   }catch(e){
     console.error('Sauvegarde OneDrive échouée', e);
@@ -8689,7 +8698,7 @@ function scheduleAutoSave(){
   // un render() ici redéclencherait scheduleAutoSave() en boucle infinie toutes les 2 secondes,
   // fermant le clavier et réinitialisant tout défilement en cours à chaque cycle, même sans
   // aucune action de l'utilisateur.
-  __autoSaveTimer = setTimeout(() => { saveToOneDrive(); }, 2000);
+  __autoSaveTimer = setTimeout(() => { __autoSaveTimer = null; saveToOneDrive(); }, 2000);
 }
 
 /* Rechargement manuel — l'app ne vérifie une éventuelle mise à jour OneDrive faite depuis un
@@ -8817,6 +8826,102 @@ function startApp(){
   // le premier scan de carte de visite soit déjà rapide (sinon le premier essai peut
   // sembler ne rien faire le temps du téléchargement, qui ne se refait pas ensuite).
   loadOcrLibrary().catch(()=>{});
+  startAutoPull();
+  setupPullToRefresh();
+}
+
+/* ---------------------------- TIRER POUR ACTUALISER ----------------------------
+   Geste tactile mobile classique : tirer vers le bas depuis le haut de la page déclenche
+   une vérification manuelle des dernières données OneDrive (identique au bouton 🔄). */
+function setupPullToRefresh(){
+  let startY = null;
+  let currentPull = 0;
+  const PTR_THRESHOLD = 70;
+  const indicator = document.getElementById('ptr-indicator');
+
+  document.addEventListener('touchstart', (e) => {
+    if(window.scrollY <= 0 && e.touches.length === 1){
+      startY = e.touches[0].clientY;
+      if(indicator) indicator.classList.add('dragging');
+    } else {
+      startY = null;
+    }
+  }, {passive:true});
+
+  document.addEventListener('touchmove', (e) => {
+    if(startY === null) return;
+    const delta = e.touches[0].clientY - startY;
+    if(delta > 0 && window.scrollY <= 0){
+      currentPull = Math.min(delta, 120);
+      if(indicator){
+        indicator.style.transform = `translate(-50%, ${currentPull - 40}px)`;
+        indicator.style.opacity = Math.min(currentPull / PTR_THRESHOLD, 1);
+        indicator.textContent = currentPull > PTR_THRESHOLD ? '↑ Relâcher pour actualiser' : '↓ Tirer pour actualiser';
+      }
+    } else {
+      startY = null;
+      currentPull = 0;
+      if(indicator){ indicator.classList.remove('dragging'); indicator.style.transform=''; indicator.style.opacity='0'; }
+    }
+  }, {passive:true});
+
+  document.addEventListener('touchend', () => {
+    if(startY === null) return;
+    if(indicator){
+      indicator.classList.remove('dragging');
+      indicator.style.transform = '';
+      indicator.style.opacity = '0';
+    }
+    if(currentPull > PTR_THRESHOLD){
+      if(oneDriveStatus === 'connected') reloadFromOneDrive();
+      else toast('Connectez-vous à OneDrive pour pouvoir actualiser ainsi.');
+    }
+    startY = null;
+    currentPull = 0;
+  }, {passive:true});
+}
+
+/* ---------------------------- MISE À JOUR AUTOMATIQUE EN ARRIÈRE-PLAN ----------------------------
+   Vérifie périodiquement si une version plus récente existe sur OneDrive (ex. modification faite
+   sur un autre appareil) et l'applique silencieusement — sans jamais interrompre une saisie en
+   cours ni écraser une modification pas encore envoyée. */
+function snapshotDataOnly(snap){
+  // Compare uniquement les vraies données, jamais les champs techniques (horodatage de sauvegarde,
+  // cache de département recalculé à l'affichage…) qui diffèrent toujours d'un appareil à l'autre
+  // sans que ça ne reflète un vrai changement.
+  const cleanCompanies = (snap.companies||[]).map(c => { const {_deptCache, ...rest} = c; return rest; });
+  return JSON.stringify({
+    companies: cleanCompanies, contacts: snap.contacts, tasks: snap.tasks,
+    notes: snap.notes, opportunities: snap.opportunities, documents: snap.documents,
+    tournees: snap.tournees,
+  });
+}
+let __autoPullInterval = null;
+function startAutoPull(){
+  if(__autoPullInterval) clearInterval(__autoPullInterval);
+  __autoPullInterval = setInterval(checkForRemoteUpdates, 20000); // toutes les 20 secondes
+}
+async function checkForRemoteUpdates(){
+  if(oneDriveStatus !== 'connected') return;
+  if(__autoSaveTimer) return; // une modification locale est en attente d'envoi : on ne touche à rien
+  if(state.ocrStatus) return; // un scan de carte est en cours
+  const active = document.activeElement;
+  const isTyping = active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName);
+  if(isTyping) return; // ne jamais interrompre une saisie en cours, même dans un champ sans rapport
+  if(document.querySelector('.modal-overlay')) return; // ne pas perturber une fenêtre modale ouverte
+  try{
+    const snap = await downloadFromOneDrive();
+    if(snap && snapshotDataOnly(snap) !== snapshotDataOnly(buildSnapshot())){
+      applySnapshot(snap);
+      if(!DB.companies.find(c=>c.id===state.selectedCompanyId)){
+        state.selectedCompanyId = computeStartingCompanyId();
+      }
+      render();
+      toast('🔄 Mis à jour depuis un autre appareil', 2200);
+    }
+  }catch(e){
+    console.warn('Vérification automatique des mises à jour échouée', e);
+  }
 }
 
 /* ---------------------------- VERROU D'ACCÈS ----------------------------
