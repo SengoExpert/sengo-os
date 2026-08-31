@@ -122,22 +122,27 @@
   }
 
   /* ===== Verrou d'accès ===== */
+  /* Volontairement neutre : ressemble à une page qui charge, pas à un écran de connexion
+     — pas de nom d'app, pas de mention "mot de passe", pas de message d'erreur explicite. */
   .lock-screen{
-    min-height:100vh;display:flex;align-items:center;justify-content:center;
-    background:var(--brand-ink);padding:20px;
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:#fafafa;gap:18px;
   }
-  .lock-box{
-    background:#fff;border-radius:14px;padding:32px 28px;width:100%;max-width:320px;
-    box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center;
+  .lock-spinner{
+    width:20px;height:20px;border-radius:50%;border:2px solid #e2e2e2;border-top-color:#aaa;
+    animation:lockSpin .9s linear infinite;
   }
-  .lock-brand{font-family:'IBM Plex Sans';font-weight:700;font-size:22px;color:var(--ink-900);margin-bottom:4px;}
-  .lock-brand span{color:var(--brand-orange);}
-  .lock-sub{font-size:13px;color:var(--ink-500);margin-bottom:20px;}
-  .lock-box input{
-    width:100%;border:1px solid var(--line);border-radius:8px;padding:11px 12px;font-size:14px;
-    text-align:center;box-sizing:border-box;
+  @keyframes lockSpin{ to{ transform:rotate(360deg); } }
+  .lock-screen input{
+    width:130px;border:1px solid #e2e2e2;border-radius:6px;padding:8px 10px;font-size:13px;
+    text-align:center;background:#fff;color:#333;
   }
-  .lock-error{color:var(--red);font-size:12.5px;margin-top:8px;}
+  .lock-screen input.lock-shake{ animation:lockShake .35s; }
+  @keyframes lockShake{
+    0%,100%{ transform:translateX(0); }
+    20%,60%{ transform:translateX(-6px); }
+    40%,80%{ transform:translateX(6px); }
+  }
 
   /* ===== Layout ===== */
   .layout{display:grid;grid-template-columns:320px 1fr;gap:16px;padding:16px;align-items:start;}
@@ -8468,13 +8473,8 @@ function isAppUnlocked(){
 function renderLockScreen(showError){
   document.getElementById('app').innerHTML = `
     <div class="lock-screen">
-      <div class="lock-box">
-        <div class="lock-brand">SENGO<span>OS</span></div>
-        <div class="lock-sub">Accès protégé</div>
-        <input type="password" id="lock-password" placeholder="Mot de passe" autocomplete="current-password">
-        ${showError ? `<div class="lock-error">Mot de passe incorrect.</div>` : ''}
-        <button class="btn primary" onclick="tryUnlock()" style="width:100%;margin-top:10px;">Déverrouiller</button>
-      </div>
+      <div class="lock-spinner"></div>
+      <input type="password" id="lock-password" class="${showError?'lock-shake':''}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     </div>`;
   const input = document.getElementById('lock-password');
   if(input){
