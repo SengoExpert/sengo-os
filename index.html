@@ -83,7 +83,7 @@
     color:#fff;border-radius:7px;padding:7px 10px;font-size:12.5px;max-width:180px;min-width:0;
   }
   .prestataire-wrap select option{color:var(--ink-900);background:#fff;}
-  .onedrive-wrap{flex:none;}
+  .onedrive-wrap{flex:none;display:flex;gap:6px;}
   .onedrive-btn{
     background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;
     border-radius:7px;padding:7px 12px;font-size:12.5px;font-weight:600;white-space:nowrap;
@@ -116,7 +116,7 @@
     .prestataire-wrap{order:4;flex:1 1 100%;}
     .prestataire-wrap select{width:100%;max-width:none;}
     .onedrive-wrap{order:5;flex:1 1 100%;}
-    .onedrive-btn{width:100%;}
+    .onedrive-btn{flex:1;}
     .search-wrap{order:2;width:auto;flex:1;}
   }
 
@@ -5965,6 +5965,9 @@ function renderTopbar(){
           ${oneDriveStatus==='error' ? '⚠️ Réessayer' : '☁️ Connecter OneDrive'}
         </button>
       `}
+      <button class="onedrive-btn" onclick="exportDataBackup()" title="Télécharger une sauvegarde de toutes les données, pour changer de compte OneDrive sans rien perdre">⬇️ Exporter</button>
+      <button class="onedrive-btn" onclick="triggerImportBackup()" title="Recharger une sauvegarde téléchargée précédemment">⬆️ Importer</button>
+      <input type="file" id="import-backup-input" accept="application/json" style="display:none;" onchange="importDataBackup(this)">
     </div>
     <div class="search-wrap">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
@@ -7905,6 +7908,45 @@ function applySnapshot(snap){
   DB.companies.forEach(c => { c._deptCache = undefined; });
 }
 
+/* Export / import manuel — utile pour migrer les données d'un compte OneDrive à un
+   autre (ex. compte personnel vers compte professionnel) sans risque de les mélanger :
+   on exporte une sauvegarde locale, on se reconnecte avec l'autre compte, on l'importe. */
+function exportDataBackup(){
+  const snap = buildSnapshot();
+  const blob = new Blob([JSON.stringify(snap, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'sengo-os-sauvegarde-' + todayStr + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Sauvegarde téléchargée.');
+}
+function triggerImportBackup(){
+  const input = document.getElementById('import-backup-input');
+  if(input) input.click();
+}
+function importDataBackup(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const snap = JSON.parse(e.target.result);
+      applySnapshot(snap);
+      state.selectedCompanyId = computeStartingCompanyId();
+      toast('Sauvegarde importée (' + (snap.companies?.length||0) + ' entreprises).');
+      render();
+    }catch(err){
+      toast('Fichier de sauvegarde invalide.');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
 async function getGraphToken(){
   if(!msalInstance) throw new Error('OneDrive indisponible (bibliothèque non chargée).');
   const account = msalInstance.getActiveAccount();
@@ -8024,7 +8066,7 @@ async function initOneDrive(){
     msalInstance = new msal.PublicClientApplication({
       auth: {
         clientId: ONEDRIVE_CLIENT_ID,
-        authority: 'https://login.microsoftonline.com/consumers',
+        authority: 'https://login.microsoftonline.com/common', // accepte comptes personnels ET professionnels (nécessite signInAudience = AzureADandPersonalMicrosoftAccount côté Azure)
         redirectUri: window.location.href.split('?')[0].split('#')[0],
       },
       cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false },
