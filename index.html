@@ -120,6 +120,10 @@
     .onedrive-wrap{order:2;flex:none;}
     .search-wrap{order:2;width:auto;flex:1;min-width:0;}
     .search-results{left:auto;right:0;width:calc(100vw - 24px);}
+    /* Sous 16px, Safari iOS zoome automatiquement toute la page à la mise au point d'un
+       champ — et ce zoom reste parfois bloqué après la saisie. On force donc 16px minimum
+       sur tous les champs, quel que soit le composant, pour empêcher ce zoom involontaire. */
+    input, select, textarea{ font-size:16px !important; }
   }
 
   /* ===== Verrou d'accès ===== */
@@ -5945,6 +5949,7 @@ function renderInlineCompanyForm(){
         </select>
         <input id="nco-activite" placeholder="Activité" />
       </div>
+      <input id="nco-adresse" placeholder="Adresse" />
       <div class="grid2">
         <input id="nco-ville" placeholder="Ville" />
         <select id="nco-region">
@@ -6004,7 +6009,7 @@ function submitNewCompany(){
   const co = {
     id, nom, secteur: document.getElementById('nco-secteur').value || 'Autre',
     activite: document.getElementById('nco-activite').value.trim(),
-    adresse:'', ville: document.getElementById('nco-ville').value.trim(),
+    adresse: document.getElementById('nco-adresse').value.trim(), ville: document.getElementById('nco-ville').value.trim(),
     region: document.getElementById('nco-region').value || null,
     tel: document.getElementById('nco-tel').value.trim(),
     site: document.getElementById('nco-site').value.trim(),
@@ -8194,7 +8199,7 @@ async function loadOcrLibrary(){
    Ce n'est jamais garanti à 100% — les champs proposés sont à vérifier avant enregistrement. */
 function parseBusinessCardText(text){
   const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
-  const result = {prenom:'', nom:'', fonction:'', tel:'', email:'', site:'', societe:''};
+  const result = {prenom:'', nom:'', fonction:'', tel:'', email:'', site:'', societe:'', adresse:''};
 
   const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   if(emailMatch) result.email = emailMatch[0].toLowerCase();
@@ -8208,6 +8213,13 @@ function parseBusinessCardText(text){
   const siteCandidates = siteMatch.filter(s => !(result.email && result.email.includes(s)) && s.length>4);
   const bestSite = siteCandidates.find(s => /^(https?:\/\/|www\.)/i.test(s)) || siteCandidates[0];
   if(bestSite) result.site = bestSite;
+
+  // Adresse : une ligne "numéro + type de voie" (rue, avenue, chemin, ZI…) et/ou une ligne
+  // "code postal + ville" — les deux sont recherchées et combinées si présentes.
+  const streetLine = lines.find(l => /^\d{0,4}\s?,?\s?(rue|avenue|av\.|boulevard|bd\.?|chemin|route|allée|impasse|place|quai|voie|za\b|zi\b|zac\b)/i.test(l));
+  const postalCityLine = lines.find(l => /\b\d{5}\b/.test(l) && !/\d{5}\d/.test(l.replace(/\s/g,'')) && l !== streetLine);
+  const adresseParts = [streetLine, postalCityLine].filter(Boolean);
+  if(adresseParts.length) result.adresse = adresseParts.join(', ');
 
   // Ligne(s) tout en majuscules et sans chiffres -> probablement la société
   const societeLine = lines.find(l => l.length>2 && l === l.toUpperCase() && /[A-ZÀ-Ü]/.test(l) && !/\d{3}/.test(l) && !l.includes('@'));
@@ -8311,6 +8323,7 @@ function applyOcrFieldsToForm(target, fields){
     addingCompanyOpen = true;
     render();
     if(fields.societe) document.getElementById('nco-nom').value = fields.societe;
+    if(fields.adresse) document.getElementById('nco-adresse').value = fields.adresse;
     if(fields.tel) document.getElementById('nco-tel').value = fields.tel;
     if(fields.site) document.getElementById('nco-site').value = fields.site;
     if(fields.prenom) document.getElementById('nco-ct-prenom').value = fields.prenom;
@@ -8332,6 +8345,7 @@ function applyOcrFieldsToForm(target, fields){
     if(co){
       if(!co.tel && fields.tel) co.tel = fields.tel;
       if(!co.site && fields.site) co.site = fields.site;
+      if(!co.adresse && fields.adresse) co.adresse = fields.adresse;
     }
     const block = document.getElementById('contact-block');
     if(block) block.scrollIntoView({behavior:'smooth', block:'start'});
