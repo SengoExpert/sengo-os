@@ -5621,12 +5621,12 @@ function buildHistory(cid){
   return items.sort((a,b)=> b.date.localeCompare(a.date));
 }
 
-function toast(msg){
+function toast(msg, duration){
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(window.__toastT);
-  window.__toastT = setTimeout(()=>el.classList.remove('show'), 2200);
+  window.__toastT = setTimeout(()=>el.classList.remove('show'), duration || 2200);
 }
 
 function selectCompany(cid, taskId=null){
@@ -6211,6 +6211,16 @@ function runSearch(q){
   state.searchQuery = q;
   render();
 }
+function closeSearchResultsSoon(){
+  // Délai court avant de fermer — le champ est reconstruit à chaque frappe (donc "perd le focus"
+  // techniquement à chaque caractère), on vérifie donc qu'on est VRAIMENT reparti ailleurs plutôt
+  // que de fermer aveuglément : sinon la recherche se fermerait toute seule en pleine saisie.
+  setTimeout(() => {
+    const active = document.activeElement;
+    const stillInSearch = active && active.dataset && active.dataset.focusKey === 'topbar-search';
+    if(!stillInSearch && state.searchQuery){ state.searchQuery=''; render(); }
+  }, 200);
+}
 function runSearchAction(i){
   state.searchQuery = ''; // referme le menu de résultats une fois la sélection faite
   const action = __searchActions[i];
@@ -6279,7 +6289,7 @@ function renderTopbar(){
     <div class="onedrive-wrap">
       ${oneDriveStatus==='connected' ? `
         <button class="onedrive-btn" onclick="reloadFromOneDrive()" title="Recharger les dernières données depuis OneDrive (utile après une modification faite sur un autre appareil)">🔄</button>
-        <button class="onedrive-btn connected" onclick="disconnectOneDrive()" title="${oneDriveError ? 'Dernière synchro en erreur : '+esc(oneDriveError) : (oneDriveLastSync ? 'OneDrive connecté — dernière synchro : '+oneDriveLastSync.toLocaleTimeString('fr-FR') : 'OneDrive connecté')}">☁️</button>
+        <button class="onedrive-btn connected" onclick="disconnectOneDrive()" title="${oneDriveAccountEmail ? 'Connecté : '+esc(oneDriveAccountEmail)+(oneDriveLastSync?' — dernière synchro '+oneDriveLastSync.toLocaleTimeString('fr-FR'):'') : 'OneDrive connecté'}${oneDriveError ? ' — Erreur : '+esc(oneDriveError) : ''}">☁️</button>
       ` : oneDriveStatus==='connecting' ? `
         <button class="onedrive-btn" disabled title="Connexion à OneDrive en cours…">☁️</button>
       ` : oneDriveStatus==='unavailable' ? `
@@ -6292,7 +6302,7 @@ function renderTopbar(){
     <div class="search-wrap">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input placeholder="Rechercher…" value="${esc(state.searchQuery)}"
-        oninput="runSearch(this.value)" data-focus-key="topbar-search" />
+        oninput="runSearch(this.value)" onblur="closeSearchResultsSoon()" data-focus-key="topbar-search" />
       ${state.searchQuery.length>1 ? `
       <div class="search-results">
         ${results.length ? results.map((r,i)=>`
@@ -8539,6 +8549,7 @@ function applyOcrFieldsToForm(target, fields){
 let msalInstance = null;
 let oneDriveStatus = 'connecting'; // unavailable | disconnected | connecting | connected | error
 let oneDriveLastSync = null;
+let oneDriveAccountEmail = '';
 let oneDriveError = '';
 
 function buildSnapshot(){
@@ -8723,13 +8734,14 @@ async function connectOneDrive(){
   try{
     const loginResp = await msalInstance.loginPopup({ scopes: ONEDRIVE_SCOPES, prompt: 'select_account' });
     msalInstance.setActiveAccount(loginResp.account);
+    oneDriveAccountEmail = loginResp.account?.username || '';
     const snap = await downloadFromOneDrive();
     if(snap){
       applySnapshot(snap);
       state.selectedCompanyId = computeStartingCompanyId();
-      toast('Données chargées depuis OneDrive.');
+      toast('Connecté (' + oneDriveAccountEmail + ') — données chargées.', 5000);
     } else {
-      toast('OneDrive connecté — première sauvegarde en cours…');
+      toast('Connecté (' + oneDriveAccountEmail + ') — première sauvegarde en cours…', 5000);
     }
     oneDriveStatus = 'connected';
     if(!snap) await saveToOneDrive();
@@ -8745,6 +8757,7 @@ async function connectOneDrive(){
 function disconnectOneDrive(){
   if(msalInstance) msalInstance.setActiveAccount(null);
   oneDriveStatus = 'disconnected';
+  oneDriveAccountEmail = '';
   toast('Déconnecté de OneDrive (les données restent enregistrées en ligne).');
   render();
 }
@@ -8770,12 +8783,14 @@ async function initOneDrive(){
     const accounts = msalInstance.getAllAccounts();
     if(accounts.length){
       msalInstance.setActiveAccount(accounts[0]);
+      oneDriveAccountEmail = accounts[0]?.username || '';
       oneDriveStatus = 'connecting';
       render();
       const snap = await downloadFromOneDrive();
       applySnapshot(snap);
       state.selectedCompanyId = computeStartingCompanyId();
       oneDriveStatus = 'connected';
+      toast('OneDrive : ' + oneDriveAccountEmail, 5000);
     }
   }catch(e){
     console.error('Restauration OneDrive échouée', e);
