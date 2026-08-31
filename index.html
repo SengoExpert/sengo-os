@@ -304,6 +304,12 @@
     border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--panel-2);
   }
   .contact-card:last-child{margin-bottom:0;}
+  .group-site-item{
+    display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:6px;
+    cursor:pointer;font-size:13px;border:1px solid var(--line);margin-bottom:6px;
+  }
+  .group-site-item:hover{background:var(--panel-2);}
+  .group-site-item:last-child{margin-bottom:0;}
   .ct-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
   .ct-name{font-weight:600;font-size:13.5px;}
   .ct-fn{font-size:12px;color:var(--ink-500);}
@@ -5563,7 +5569,7 @@ let state = {
   noteSort: {field:'date', dir:'desc'},
   // Entreprises (liste triable/filtrable)
   entSort: {field:'nom', dir:'asc'},
-  entFilters: {secteur:'tous', region:'tous', departement:'tous', taille:'tous', potentiel:'tous', q:''},
+  entFilters: {secteur:'tous', region:'tous', departement:'tous', taille:'tous', potentiel:'tous', groupe:'tous', q:''},
   // Contacts (liste triable/filtrable)
   ctSort: {field:'nom', dir:'asc'},
   ctFilters: {role:'tous', q:''},
@@ -5931,6 +5937,12 @@ function saveResume(cid){
 function updateCompanyField(cid, field, value){
   const co = byId(DB.companies, cid);
   co[field] = value;
+  if(field==='rue' || field==='codePostal' || field==='ville') syncAdresseFromParts(co);
+}
+function syncAdresseFromParts(co){
+  const cpVille = [co.codePostal, co.ville].filter(Boolean).join(' ');
+  const parts = [co.rue, cpVille].filter(Boolean);
+  if(parts.length) co.adresse = parts.join(', ');
 }
 function updatePrestataire(cid, value){
   const co = byId(DB.companies, cid);
@@ -5948,9 +5960,9 @@ function updatePotentiel(cid, value){
 
 /* Création / suppression d'entreprise */
 let addingCompanyOpen = false;
-let newCompanyForm = {nom:'', secteur:'', activite:'', adresse:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctEmail:'', ctRole:'autre'};
+let newCompanyForm = {nom:'', secteur:'', activite:'', rue:'', codePostal:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctEmail:'', ctRole:'autre'};
 function resetNewCompanyForm(){
-  newCompanyForm = {nom:'', secteur:'', activite:'', adresse:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctEmail:'', ctRole:'autre'};
+  newCompanyForm = {nom:'', secteur:'', activite:'', rue:'', codePostal:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctEmail:'', ctRole:'autre'};
 }
 function toggleAddCompany(){
   addingCompanyOpen = !addingCompanyOpen;
@@ -5974,14 +5986,15 @@ function renderInlineCompanyForm(){
         </select>
         <input id="nco-activite" placeholder="Activité" value="${esc(newCompanyForm.activite)}" oninput="newCompanyForm.activite=this.value">
       </div>
-      <input id="nco-adresse" placeholder="Adresse" value="${esc(newCompanyForm.adresse)}" oninput="newCompanyForm.adresse=this.value">
+      <input id="nco-rue" placeholder="Rue" value="${esc(newCompanyForm.rue)}" oninput="newCompanyForm.rue=this.value">
       <div class="grid2">
+        <input id="nco-cp" placeholder="Code postal" value="${esc(newCompanyForm.codePostal)}" oninput="newCompanyForm.codePostal=this.value">
         <input id="nco-ville" placeholder="Ville" value="${esc(newCompanyForm.ville)}" oninput="newCompanyForm.ville=this.value">
-        <select id="nco-region" onchange="newCompanyForm.region=this.value">
-          <option value="">Région…</option>
-          ${regionsKnown.map(r=>`<option value="${esc(r)}" ${newCompanyForm.region===r?'selected':''}>${esc(r)}</option>`).join('')}
-        </select>
       </div>
+      <select id="nco-region" onchange="newCompanyForm.region=this.value">
+        <option value="">Région…</option>
+        ${regionsKnown.map(r=>`<option value="${esc(r)}" ${newCompanyForm.region===r?'selected':''}>${esc(r)}</option>`).join('')}
+      </select>
       <div class="grid2">
         <input id="nco-tel" placeholder="Téléphone" value="${esc(newCompanyForm.tel)}" oninput="newCompanyForm.tel=this.value">
         <input id="nco-site" placeholder="Site web" value="${esc(newCompanyForm.site)}" oninput="newCompanyForm.site=this.value">
@@ -6037,7 +6050,8 @@ function submitNewCompany(){
   const co = {
     id, nom, secteur: newCompanyForm.secteur || 'Autre',
     activite: newCompanyForm.activite.trim(),
-    adresse: newCompanyForm.adresse.trim(), ville: newCompanyForm.ville.trim(),
+    rue: newCompanyForm.rue.trim(), codePostal: newCompanyForm.codePostal.trim(), ville: newCompanyForm.ville.trim(),
+    adresse: [newCompanyForm.rue.trim(), [newCompanyForm.codePostal.trim(), newCompanyForm.ville.trim()].filter(Boolean).join(' ')].filter(Boolean).join(', '),
     region: newCompanyForm.region || null,
     tel: newCompanyForm.tel.trim(),
     site: newCompanyForm.site.trim(),
@@ -6078,6 +6092,24 @@ function submitNewCompany(){
   selectCompany(id);
   state.activeNav = 'aujourdhui';
   render();
+}
+function getGroupSiblings(co){
+  if(!co.groupe) return [];
+  const key = co.groupe.trim().toLowerCase();
+  return DB.companies.filter(c => c.id!==co.id && c.groupe && c.groupe.trim().toLowerCase()===key);
+}
+function renderGroupSites(co){
+  if(!co.groupe) return '';
+  const siblings = getGroupSiblings(co).sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  return `
+  <div class="card">
+    <h2>Sites du groupe « ${esc(co.groupe)} » <span style="font-weight:400;font-size:11px;color:var(--ink-500);text-transform:none;letter-spacing:0;">(${siblings.length+1} au total)</span></h2>
+    ${siblings.length ? siblings.map(s=>`
+      <div class="group-site-item" onclick="selectCompany('${s.id}')">
+        <span>${esc(s.nom)}</span>
+        <span class="ent-region">${esc(s.ville||'—')}</span>
+      </div>`).join('') : `<div class="empty-queue">Aucun autre site rattaché à ce groupe pour l'instant — ajoutez le même nom de groupe sur une autre entreprise pour les relier ici.</div>`}
+  </div>`;
 }
 function deleteCompany(cid){
   const co = byId(DB.companies, cid);
@@ -6329,7 +6361,10 @@ function renderCockpit(){
     ${renderResume(co)}
 
     <div class="two-col">
-      ${renderEntreprise(co)}
+      <div>
+        ${renderEntreprise(co)}
+        ${renderGroupSites(co)}
+      </div>
       ${renderContacts(co, contacts)}
     </div>
 
@@ -6462,17 +6497,27 @@ function renderResume(co){
 }
 
 function renderEntreprise(co){
+  const groupesConnus = [...new Set(DB.companies.map(c=>c.groupe).filter(Boolean))].sort();
   return `
   <div class="card">
     <h2>Entreprise</h2>
     <div class="field-row"><label>Raison sociale</label><input value="${esc(co.nom)}" onblur="updateCompanyField('${co.id}','nom',this.value)"></div>
+    <div class="field-row"><label>Groupe (si multi-site)</label>
+      <input list="groupe-suggestions" value="${esc(co.groupe||'')}" placeholder="Nom du groupe — laisser vide si site unique" onblur="updateCompanyField('${co.id}','groupe',this.value)">
+      <datalist id="groupe-suggestions">${groupesConnus.map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
+    </div>
     <div class="field-row"><label>Secteur</label>
       <select onchange="updateCompanyField('${co.id}','secteur',this.value)">
         ${Object.keys(SECTOR_COLORS).map(s=>`<option value="${esc(s)}" ${co.secteur===s?'selected':''}>${esc(s)}</option>`).join('')}
       </select>
     </div>
     <div class="field-row"><label>Activité</label><input value="${esc(co.activite)}" onblur="updateCompanyField('${co.id}','activite',this.value)"></div>
-    <div class="field-row"><label>Adresse</label><input value="${esc(co.adresse)}" onblur="updateCompanyField('${co.id}','adresse',this.value)"></div>
+    <div class="field-row"><label>Rue</label><input value="${esc(co.rue||'')}" onblur="updateCompanyField('${co.id}','rue',this.value)"></div>
+    <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;">
+      <div class="field-row"><label>Code postal</label><input class="mono" value="${esc(co.codePostal||'')}" onblur="updateCompanyField('${co.id}','codePostal',this.value)"></div>
+      <div class="field-row"><label>Ville</label><input value="${esc(co.ville||'')}" onblur="updateCompanyField('${co.id}','ville',this.value)"></div>
+    </div>
+    ${(!co.rue && !co.codePostal && co.adresse) ? `<div style="font-size:11px;color:var(--ink-500);margin:-6px 0 10px;">Ancienne saisie : ${esc(co.adresse)} — à répartir ci-dessus si besoin.</div>` : ''}
     <div class="field-row"><label>Téléphone</label><input class="mono" value="${esc(co.tel)}" onblur="updateCompanyField('${co.id}','tel',this.value)"></div>
     <div class="field-row"><label>Site web</label><input value="${esc(co.site)}" onblur="updateCompanyField('${co.id}','site',this.value)"></div>
     <div class="field-row"><label>Prestataire</label>
@@ -6934,6 +6979,7 @@ function filteredSortedCompanies(){
     (f.departement==='tous' || (getCompanyDept(c) && getCompanyDept(c).code===f.departement)) &&
     (f.taille==='tous' || tailleCategorie(c.effectif)===f.taille) &&
     (f.potentiel==='tous' || c.potentiel===f.potentiel) &&
+    (f.groupe==='tous' || (c.groupe||'').trim().toLowerCase()===f.groupe) &&
     (!f.q || c.nom.toLowerCase().includes(f.q.toLowerCase()))
   );
   const {field, dir} = state.entSort;
@@ -6952,7 +6998,7 @@ function filteredSortedCompanies(){
   return list;
 }
 function resetEntFilters(){
-  state.entFilters = {secteur:'tous', region:'tous', departement:'tous', taille:'tous', potentiel:'tous', q:''};
+  state.entFilters = {secteur:'tous', region:'tous', departement:'tous', taille:'tous', potentiel:'tous', groupe:'tous', q:''};
   render();
 }
 
@@ -6960,6 +7006,9 @@ function renderEntreprisesPage(){
   const secteurs = [...new Set(DB.companies.map(c=>c.secteur))].sort();
   const regions = [...new Set(DB.companies.map(c=>c.region))].sort();
   const tailles = ['TPE','PME','ETI','GE'];
+  const groupesMap = {};
+  DB.companies.forEach(c=>{ if(c.groupe){ const k=c.groupe.trim().toLowerCase(); groupesMap[k] = groupesMap[k] || c.groupe.trim(); } });
+  const groupesOptions = Object.entries(groupesMap).sort((a,b)=>a[1].localeCompare(b[1],'fr'));
   const deptCounts = {};
   DB.companies.forEach(c=>{ const d=getCompanyDept(c); if(d){ deptCounts[d.code] = (deptCounts[d.code]||0)+1; } });
   const deptOptions = Object.keys(deptCounts).sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
@@ -7011,6 +7060,11 @@ function renderEntreprisesPage(){
         <option value="moyen" ${f.potentiel==='moyen'?'selected':''}>Potentiel moyen</option>
         <option value="faible" ${f.potentiel==='faible'?'selected':''}>Potentiel faible</option>
       </select>
+      ${groupesOptions.length ? `
+      <select onchange="state.entFilters.groupe=this.value;render()">
+        <option value="tous" ${f.groupe==='tous'?'selected':''}>Tous groupes</option>
+        ${groupesOptions.map(([key,label])=>`<option value="${esc(key)}" ${f.groupe===key?'selected':''}>${esc(label)}</option>`).join('')}
+      </select>` : ''}
       ${isFiltered ? `<button class="btn small" onclick="resetEntFilters()">Réinitialiser</button>` : ''}
     </div>
 
@@ -8292,7 +8346,7 @@ function isPlausibleText(str, minLetterRatio){
    Ce n'est jamais garanti à 100% — les champs proposés sont à vérifier avant enregistrement. */
 function parseBusinessCardText(text){
   const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
-  const result = {prenom:'', nom:'', fonction:'', tel:'', email:'', site:'', societe:'', adresse:''};
+  const result = {prenom:'', nom:'', fonction:'', tel:'', email:'', site:'', societe:'', rue:'', codePostal:'', ville:''};
 
   const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   if(emailMatch) result.email = emailMatch[0].toLowerCase();
@@ -8307,12 +8361,18 @@ function parseBusinessCardText(text){
   const bestSite = siteCandidates.find(s => /^(https?:\/\/|www\.)/i.test(s)) || siteCandidates[0];
   if(bestSite) result.site = bestSite;
 
-  // Adresse : une ligne "numéro + type de voie" (rue, avenue, chemin, ZI…) et/ou une ligne
-  // "code postal + ville" — les deux sont recherchées et combinées si présentes.
+  // Adresse : une ligne "numéro + type de voie" (rue, avenue, chemin, ZI…) pour la rue,
+  // et une ligne "code postal + ville" que l'on sépare en deux champs distincts.
   const streetLine = lines.find(l => /^\d{0,4}\s?,?\s?(rue|avenue|av\.|boulevard|bd\.?|chemin|route|allée|impasse|place|quai|voie|za\b|zi\b|zac\b)/i.test(l));
+  if(streetLine) result.rue = streetLine;
   const postalCityLine = lines.find(l => /\b\d{5}\b/.test(l) && !/\d{5}\d/.test(l.replace(/\s/g,'')) && l !== streetLine);
-  const adresseParts = [streetLine, postalCityLine].filter(Boolean);
-  if(adresseParts.length) result.adresse = adresseParts.join(', ');
+  if(postalCityLine){
+    const m = postalCityLine.match(/(\d{5})\s*(.*)/);
+    if(m){
+      result.codePostal = m[1];
+      if(m[2] && isPlausibleText(m[2].trim(), 0.6)) result.ville = m[2].trim();
+    }
+  }
 
   // Ligne(s) tout en majuscules et sans chiffres -> probablement la société
   const societeLine = lines.find(l => l.length>2 && l === l.toUpperCase() && /[A-ZÀ-Ü]/.test(l) && !/\d{3}/.test(l) && !l.includes('@') && isPlausibleText(l, 0.45));
@@ -8432,7 +8492,9 @@ function applyOcrFieldsToForm(target, fields){
     if(!addingCompanyOpen) resetNewCompanyForm(); // ne pas écraser une saisie manuelle déjà en cours
     addingCompanyOpen = true;
     if(fields.societe) newCompanyForm.nom = fields.societe;
-    if(fields.adresse) newCompanyForm.adresse = fields.adresse;
+    if(fields.rue) newCompanyForm.rue = fields.rue;
+    if(fields.codePostal) newCompanyForm.codePostal = fields.codePostal;
+    if(fields.ville) newCompanyForm.ville = fields.ville;
     if(fields.tel) newCompanyForm.tel = fields.tel;
     if(fields.site) newCompanyForm.site = fields.site;
     if(fields.prenom) newCompanyForm.ctPrenom = fields.prenom;
@@ -8456,7 +8518,10 @@ function applyOcrFieldsToForm(target, fields){
     if(co){
       if(!co.tel && fields.tel) co.tel = fields.tel;
       if(!co.site && fields.site) co.site = fields.site;
-      if(!co.adresse && fields.adresse) co.adresse = fields.adresse;
+      if(!co.rue && fields.rue) co.rue = fields.rue;
+      if(!co.codePostal && fields.codePostal) co.codePostal = fields.codePostal;
+      if(!co.ville && fields.ville) co.ville = fields.ville;
+      syncAdresseFromParts(co);
     }
     const block = document.getElementById('contact-block');
     if(block) block.scrollIntoView({behavior:'smooth', block:'start'});
