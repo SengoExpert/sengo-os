@@ -5939,6 +5939,11 @@ function renderInlineCompanyForm(){
         <button class="btn" onclick="toggleAddCompany()">Annuler</button>
         <button class="btn primary" onclick="submitNewCompany()">Créer l'entreprise</button>
       </div>
+      ${lastOcrRawText ? `
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-500);font-weight:700;margin-bottom:4px;">Texte brut lu sur la carte (à reporter à la main si besoin)</div>
+        <pre style="white-space:pre-wrap;font-family:'IBM Plex Mono';font-size:11.5px;color:var(--ink-700);background:var(--panel-2);padding:8px;border-radius:6px;max-height:140px;overflow:auto;">${esc(lastOcrRawText)}</pre>
+      </div>` : ''}
     </div>
   </div>`;
 }
@@ -6461,6 +6466,11 @@ function renderContactForm(cid, k){
       <button class="btn" onclick="${cancelFn}">Annuler</button>
       <button class="btn primary" onclick="submitContact('${cid}', ${isEdit?`'${k.id}'`:'null'})">${isEdit?'Enregistrer':'Ajouter le contact'}</button>
     </div>
+    ${(!isEdit && lastOcrRawText) ? `
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-500);font-weight:700;margin-bottom:4px;">Texte brut lu sur la carte (à reporter à la main si besoin)</div>
+      <pre style="white-space:pre-wrap;font-family:'IBM Plex Mono';font-size:11.5px;color:var(--ink-700);background:var(--panel-2);padding:8px;border-radius:6px;max-height:140px;overflow:auto;">${esc(lastOcrRawText)}</pre>
+    </div>` : ''}
   </div>`;
 }
 
@@ -8143,6 +8153,7 @@ function triggerScanBusinessCard(mode, companyId){
   const input = document.getElementById('ocr-scan-input');
   if(input) input.click();
 }
+let lastOcrRawText = '';
 async function handleBusinessCardScan(input){
   const file = input.files && input.files[0];
   input.value = '';
@@ -8151,6 +8162,7 @@ async function handleBusinessCardScan(input){
   ocrScanTarget = null;
 
   state.ocrStatus = 'scanning';
+  lastOcrRawText = '';
   render();
   try{
     const loaded = await loadOcrLibrary();
@@ -8161,9 +8173,13 @@ async function handleBusinessCardScan(input){
       return;
     }
     const { data: { text } } = await Tesseract.recognize(file, 'fra');
+    lastOcrRawText = text.trim();
     const fields = parseBusinessCardText(text);
-    applyOcrFieldsToForm(target, fields);
-    toast('Carte lue — vérifiez les informations proposées avant d\'enregistrer.');
+    const nbTrouves = Object.values(fields).filter(Boolean).length;
+    state.ocrStatus = null;
+    applyOcrFieldsToForm(target, fields); // gère son propre rendu + remplissage des champs : doit rester le tout dernier appel
+    toast(nbTrouves ? 'Carte lue — vérifiez les informations proposées avant d\'enregistrer.' : 'Texte lu mais rien reconnu automatiquement — le texte brut est affiché sous le formulaire, à reporter à la main.');
+    return; // important : ne pas retomber sur le render() ci-dessous, il effacerait les champs qu'on vient de remplir
   }catch(e){
     console.error('Lecture de carte échouée', e);
     toast('La lecture de la carte a échoué. Réessayez avec une photo plus nette.');
