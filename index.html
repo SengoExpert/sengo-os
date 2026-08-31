@@ -5948,8 +5948,13 @@ function updatePotentiel(cid, value){
 
 /* Création / suppression d'entreprise */
 let addingCompanyOpen = false;
+let newCompanyForm = {nom:'', secteur:'', activite:'', adresse:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctEmail:'', ctRole:'autre'};
+function resetNewCompanyForm(){
+  newCompanyForm = {nom:'', secteur:'', activite:'', adresse:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctEmail:'', ctRole:'autre'};
+}
 function toggleAddCompany(){
   addingCompanyOpen = !addingCompanyOpen;
+  if(addingCompanyOpen) resetNewCompanyForm();
   if(!addingCompanyOpen) pendingScanPhotoForNewCompany = null;
   render();
 }
@@ -5961,52 +5966,52 @@ function renderInlineCompanyForm(){
   <div class="card">
     <h2>Nouvelle entreprise</h2>
     <div class="inline-form">
-      <input id="nco-nom" placeholder="Raison sociale *" />
+      <input id="nco-nom" placeholder="Raison sociale *" value="${esc(newCompanyForm.nom)}" oninput="newCompanyForm.nom=this.value">
       <div class="grid2">
-        <select id="nco-secteur">
+        <select id="nco-secteur" onchange="newCompanyForm.secteur=this.value">
           <option value="">Secteur…</option>
-          ${secteurs.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('')}
+          ${secteurs.map(s=>`<option value="${esc(s)}" ${newCompanyForm.secteur===s?'selected':''}>${esc(s)}</option>`).join('')}
         </select>
-        <input id="nco-activite" placeholder="Activité" />
+        <input id="nco-activite" placeholder="Activité" value="${esc(newCompanyForm.activite)}" oninput="newCompanyForm.activite=this.value">
       </div>
-      <input id="nco-adresse" placeholder="Adresse" />
+      <input id="nco-adresse" placeholder="Adresse" value="${esc(newCompanyForm.adresse)}" oninput="newCompanyForm.adresse=this.value">
       <div class="grid2">
-        <input id="nco-ville" placeholder="Ville" />
-        <select id="nco-region">
+        <input id="nco-ville" placeholder="Ville" value="${esc(newCompanyForm.ville)}" oninput="newCompanyForm.ville=this.value">
+        <select id="nco-region" onchange="newCompanyForm.region=this.value">
           <option value="">Région…</option>
-          ${regionsKnown.map(r=>`<option value="${esc(r)}">${esc(r)}</option>`).join('')}
+          ${regionsKnown.map(r=>`<option value="${esc(r)}" ${newCompanyForm.region===r?'selected':''}>${esc(r)}</option>`).join('')}
         </select>
       </div>
       <div class="grid2">
-        <input id="nco-tel" placeholder="Téléphone" />
-        <input id="nco-site" placeholder="Site web" />
+        <input id="nco-tel" placeholder="Téléphone" value="${esc(newCompanyForm.tel)}" oninput="newCompanyForm.tel=this.value">
+        <input id="nco-site" placeholder="Site web" value="${esc(newCompanyForm.site)}" oninput="newCompanyForm.site=this.value">
       </div>
       <div class="grid2">
-        <select id="nco-prestataire">
-          ${PRESTATAIRES.map(p=>`<option value="${p}" ${p==='SENGO EXPERT'?'selected':''}>${p}</option>`).join('')}
+        <select id="nco-prestataire" onchange="newCompanyForm.prestataire=this.value">
+          ${PRESTATAIRES.map(p=>`<option value="${p}" ${newCompanyForm.prestataire===p?'selected':''}>${p}</option>`).join('')}
         </select>
-        <select id="nco-potentiel">
-          <option value="moyen" selected>Potentiel moyen</option>
-          <option value="fort">Potentiel fort</option>
-          <option value="faible">Potentiel faible</option>
+        <select id="nco-potentiel" onchange="newCompanyForm.potentiel=this.value">
+          <option value="moyen" ${newCompanyForm.potentiel==='moyen'?'selected':''}>Potentiel moyen</option>
+          <option value="fort" ${newCompanyForm.potentiel==='fort'?'selected':''}>Potentiel fort</option>
+          <option value="faible" ${newCompanyForm.potentiel==='faible'?'selected':''}>Potentiel faible</option>
         </select>
       </div>
       <div style="border-top:1px solid var(--line);margin-top:6px;padding-top:12px;">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-500);font-weight:700;margin-bottom:8px;">Contact principal (facultatif)</div>
         <div class="grid2">
-          <input id="nco-ct-prenom" placeholder="Prénom" />
-          <input id="nco-ct-nom" placeholder="Nom" />
+          <input id="nco-ct-prenom" placeholder="Prénom" value="${esc(newCompanyForm.ctPrenom)}" oninput="newCompanyForm.ctPrenom=this.value">
+          <input id="nco-ct-nom" placeholder="Nom" value="${esc(newCompanyForm.ctNom)}" oninput="newCompanyForm.ctNom=this.value">
         </div>
-        <input id="nco-ct-fonction" placeholder="Fonction" style="margin-top:8px;" />
+        <input id="nco-ct-fonction" placeholder="Fonction" style="margin-top:8px;" value="${esc(newCompanyForm.ctFonction)}" oninput="newCompanyForm.ctFonction=this.value">
         <div class="grid2" style="margin-top:8px;">
-          <input id="nco-ct-tel" placeholder="Téléphone" />
-          <input id="nco-ct-email" placeholder="Email" />
+          <input id="nco-ct-tel" placeholder="Téléphone" value="${esc(newCompanyForm.ctTel)}" oninput="newCompanyForm.ctTel=this.value">
+          <input id="nco-ct-email" placeholder="Email" value="${esc(newCompanyForm.ctEmail)}" oninput="newCompanyForm.ctEmail=this.value">
         </div>
-        <select id="nco-ct-role" style="margin-top:8px;">
-          <option value="decideur">Décideur</option>
-          <option value="prescripteur">Prescripteur</option>
-          <option value="utilisateur">Utilisateur</option>
-          <option value="autre" selected>Autre</option>
+        <select id="nco-ct-role" style="margin-top:8px;" onchange="newCompanyForm.ctRole=this.value">
+          <option value="decideur" ${newCompanyForm.ctRole==='decideur'?'selected':''}>Décideur</option>
+          <option value="prescripteur" ${newCompanyForm.ctRole==='prescripteur'?'selected':''}>Prescripteur</option>
+          <option value="utilisateur" ${newCompanyForm.ctRole==='utilisateur'?'selected':''}>Utilisateur</option>
+          <option value="autre" ${newCompanyForm.ctRole==='autre'?'selected':''}>Autre</option>
         </select>
       </div>
       <div class="inline-form-actions">
@@ -6022,19 +6027,19 @@ function renderInlineCompanyForm(){
   </div>`;
 }
 function submitNewCompany(){
-  const nom = document.getElementById('nco-nom').value.trim();
+  const nom = newCompanyForm.nom.trim();
   if(!nom){ toast('La raison sociale est requise.'); return; }
-  const prestataire = document.getElementById('nco-prestataire').value;
+  const prestataire = newCompanyForm.prestataire;
   const id = 'new-'+Date.now()+'-'+Math.random().toString(36).slice(2,5);
   const co = {
-    id, nom, secteur: document.getElementById('nco-secteur').value || 'Autre',
-    activite: document.getElementById('nco-activite').value.trim(),
-    adresse: document.getElementById('nco-adresse').value.trim(), ville: document.getElementById('nco-ville').value.trim(),
-    region: document.getElementById('nco-region').value || null,
-    tel: document.getElementById('nco-tel').value.trim(),
-    site: document.getElementById('nco-site').value.trim(),
+    id, nom, secteur: newCompanyForm.secteur || 'Autre',
+    activite: newCompanyForm.activite.trim(),
+    adresse: newCompanyForm.adresse.trim(), ville: newCompanyForm.ville.trim(),
+    region: newCompanyForm.region || null,
+    tel: newCompanyForm.tel.trim(),
+    site: newCompanyForm.site.trim(),
     partenaire: prestataire==='SENGO EXPERT' ? 'SENGO Expert direct' : prestataire,
-    prestataire, potentiel: document.getElementById('nco-potentiel').value,
+    prestataire, potentiel: newCompanyForm.potentiel,
     effectif:null, ca:null, lat:null, lon:null,
     resume:'', watch:[], strategie:'',
   };
@@ -6049,22 +6054,23 @@ function submitNewCompany(){
     pendingScanPhotoForNewCompany = null;
   }
 
-  const ctPrenom = document.getElementById('nco-ct-prenom').value.trim();
-  const ctNom = document.getElementById('nco-ct-nom').value.trim();
+  const ctPrenom = newCompanyForm.ctPrenom.trim();
+  const ctNom = newCompanyForm.ctNom.trim();
   let contactCree = false;
   if(ctPrenom || ctNom){
     DB.contacts.push({
       id: 'k'+(DB.contacts.length+1)+'-'+Math.random().toString(36).slice(2,5),
       companyId: id, prenom: ctPrenom, nom: ctNom,
-      fonction: document.getElementById('nco-ct-fonction').value.trim(),
-      tel: document.getElementById('nco-ct-tel').value.trim(),
-      email: document.getElementById('nco-ct-email').value.trim(),
-      role: document.getElementById('nco-ct-role').value, notes:'',
+      fonction: newCompanyForm.ctFonction.trim(),
+      tel: newCompanyForm.ctTel.trim(),
+      email: newCompanyForm.ctEmail.trim(),
+      role: newCompanyForm.ctRole, notes:'',
     });
     contactCree = true;
   }
 
   addingCompanyOpen = false;
+  resetNewCompanyForm();
   toast('Entreprise créée' + (contactCree ? ' avec son contact.' : '.'));
   selectCompany(id);
   state.activeNav = 'aujourdhui';
@@ -6105,18 +6111,25 @@ function changeOppStatus(oid, value){
 }
 
 let addingContactFor = null;
+let contactForm = {prenom:'', nom:'', fonction:'', tel:'', email:'', role:'autre', notes:''};
+function resetContactForm(k){
+  contactForm = k
+    ? {prenom:k.prenom||'', nom:k.nom||'', fonction:k.fonction||'', tel:k.tel||'', email:k.email||'', role:k.role||'autre', notes:k.notes||''}
+    : {prenom:'', nom:'', fonction:'', tel:'', email:'', role:'autre', notes:''};
+}
 function toggleAddContact(cid){
   addingContactFor = addingContactFor === cid ? null : cid;
+  if(addingContactFor) resetContactForm(null);
   render();
 }
 function submitContact(cid, kid){
-  const prenom = document.getElementById('nc-prenom').value.trim();
-  const nom = document.getElementById('nc-nom').value.trim();
-  const fonction = document.getElementById('nc-fonction').value.trim();
-  const tel = document.getElementById('nc-tel').value.trim();
-  const email = document.getElementById('nc-email').value.trim();
-  const role = document.getElementById('nc-role').value;
-  const notes = document.getElementById('nc-notes').value.trim();
+  const prenom = contactForm.prenom.trim();
+  const nom = contactForm.nom.trim();
+  const fonction = contactForm.fonction.trim();
+  const tel = contactForm.tel.trim();
+  const email = contactForm.email.trim();
+  const role = contactForm.role;
+  const notes = contactForm.notes.trim();
   if(!prenom){ toast('Le prénom est requis.'); return; }
   if(kid){
     const k = byId(DB.contacts, kid);
@@ -6507,6 +6520,7 @@ let editingContactId = null;
 function toggleEditContact(kid){
   editingContactId = editingContactId === kid ? null : kid;
   addingContactFor = null;
+  if(editingContactId) resetContactForm(byId(DB.contacts, editingContactId));
   render();
 }
 function editContactFrom(cid, kid){
@@ -6517,6 +6531,7 @@ function editContactFrom(cid, kid){
   state.activeNav = 'aujourdhui';
   editingContactId = kid;
   addingContactFor = null;
+  resetContactForm(byId(DB.contacts, kid));
   render();
   const block = document.getElementById('contact-block');
   if(block) block.scrollIntoView({behavior:'smooth', block:'start'});
@@ -6531,21 +6546,21 @@ function renderContactForm(cid, k){
   return `
   <div class="inline-form">
     <div class="grid2">
-      <input id="nc-prenom" placeholder="Prénom" value="${isEdit?esc(k.prenom):''}" />
-      <input id="nc-nom" placeholder="Nom" value="${isEdit?esc(k.nom):''}" />
+      <input id="nc-prenom" placeholder="Prénom" value="${esc(contactForm.prenom)}" oninput="contactForm.prenom=this.value">
+      <input id="nc-nom" placeholder="Nom" value="${esc(contactForm.nom)}" oninput="contactForm.nom=this.value">
     </div>
-    <input id="nc-fonction" placeholder="Fonction" value="${isEdit?esc(k.fonction):''}" />
+    <input id="nc-fonction" placeholder="Fonction" value="${esc(contactForm.fonction)}" oninput="contactForm.fonction=this.value">
     <div class="grid2">
-      <input id="nc-tel" placeholder="Téléphone" value="${isEdit?esc(k.tel):''}" />
-      <input id="nc-email" placeholder="Email" value="${isEdit?esc(k.email):''}" />
+      <input id="nc-tel" placeholder="Téléphone" value="${esc(contactForm.tel)}" oninput="contactForm.tel=this.value">
+      <input id="nc-email" placeholder="Email" value="${esc(contactForm.email)}" oninput="contactForm.email=this.value">
     </div>
-    <select id="nc-role">
-      <option value="decideur" ${isEdit&&k.role==='decideur'?'selected':''}>Décideur</option>
-      <option value="prescripteur" ${isEdit&&k.role==='prescripteur'?'selected':''}>Prescripteur</option>
-      <option value="utilisateur" ${isEdit&&k.role==='utilisateur'?'selected':''}>Utilisateur</option>
-      <option value="autre" ${isEdit&&k.role==='autre'?'selected':''}>Autre</option>
+    <select id="nc-role" onchange="contactForm.role=this.value">
+      <option value="decideur" ${contactForm.role==='decideur'?'selected':''}>Décideur</option>
+      <option value="prescripteur" ${contactForm.role==='prescripteur'?'selected':''}>Prescripteur</option>
+      <option value="utilisateur" ${contactForm.role==='utilisateur'?'selected':''}>Utilisateur</option>
+      <option value="autre" ${contactForm.role==='autre'?'selected':''}>Autre</option>
     </select>
-    <textarea id="nc-notes" placeholder="Notes utiles (facultatif)" style="min-height:40px;">${isEdit?esc(k.notes||''):''}</textarea>
+    <textarea id="nc-notes" placeholder="Notes utiles (facultatif)" style="min-height:40px;" oninput="contactForm.notes=this.value">${esc(contactForm.notes)}</textarea>
     <div class="inline-form-actions">
       ${isEdit ? `<button class="btn danger-ghost" onclick="deleteContact('${k.id}')" style="margin-right:auto;">Supprimer</button>` : ''}
       <button class="btn" onclick="${cancelFn}">Annuler</button>
@@ -8258,8 +8273,10 @@ function isPlausibleText(str, minLetterRatio){
   if(!str) return false;
   const letters = (str.match(/[a-zA-ZÀ-ÿ]/g) || []).length;
   const digits = (str.match(/[0-9]/g) || []).length;
+  const symbols = (str.match(/[^a-zA-ZÀ-ÿ0-9\s'\-.,]/g) || []).length; // hors ponctuation courante
   if(str.length === 0) return false;
   if(digits > letters) return false;
+  if(symbols > 2) return false; // quelques symboles isolés tolérés (ex. accents mal lus), pas un déluge
   if(letters / str.length < (minLetterRatio || 0.55)) return false;
   return true;
 }
@@ -8294,8 +8311,16 @@ function parseBusinessCardText(text){
   const societeLine = lines.find(l => l.length>2 && l === l.toUpperCase() && /[A-ZÀ-Ü]/.test(l) && !/\d{3}/.test(l) && !l.includes('@') && isPlausibleText(l, 0.45));
   if(societeLine) result.societe = societeLine;
 
-  // Ligne avec deux mots capitalisés (Prénom Nom) -> probablement la personne
-  const nameLine = lines.find(l => /^[A-ZÀ-Ü][a-zà-ü'-]+\s+[A-ZÀ-Ü][a-zà-üA-ZÀ-Ü'-]+$/.test(l) && l !== societeLine && isPlausibleText(l));
+  // Ligne avec deux mots ressemblant à Prénom + Nom — quelle que soit la casse
+  // ("Philippe Martin", "Philippe MARTIN" ou "PHILIPPE MARTIN" sont tous fréquents
+  // sur une carte de visite française).
+  const nameLine = lines.find(l => {
+    if(l === societeLine) return false;
+    const words = l.split(/\s+/);
+    if(words.length !== 2) return false;
+    const wordOk = w => w.length>=2 && /^[A-ZÀ-Ü][A-Za-zà-üÀ-Ü'-]*$/.test(w);
+    return words.every(wordOk) && isPlausibleText(l);
+  });
   if(nameLine){
     const parts = nameLine.split(/\s+/);
     result.prenom = parts[0];
@@ -8391,26 +8416,28 @@ function savePhotoForScan(target, photo){
 }
 function applyOcrFieldsToForm(target, fields){
   if(target.mode === 'new'){
+    if(!addingCompanyOpen) resetNewCompanyForm(); // ne pas écraser une saisie manuelle déjà en cours
     addingCompanyOpen = true;
+    if(fields.societe) newCompanyForm.nom = fields.societe;
+    if(fields.adresse) newCompanyForm.adresse = fields.adresse;
+    if(fields.tel) newCompanyForm.tel = fields.tel;
+    if(fields.site) newCompanyForm.site = fields.site;
+    if(fields.prenom) newCompanyForm.ctPrenom = fields.prenom;
+    if(fields.nom) newCompanyForm.ctNom = fields.nom;
+    if(fields.fonction) newCompanyForm.ctFonction = fields.fonction;
+    if(fields.tel) newCompanyForm.ctTel = fields.tel;
+    if(fields.email) newCompanyForm.ctEmail = fields.email;
     render();
-    if(fields.societe) document.getElementById('nco-nom').value = fields.societe;
-    if(fields.adresse) document.getElementById('nco-adresse').value = fields.adresse;
-    if(fields.tel) document.getElementById('nco-tel').value = fields.tel;
-    if(fields.site) document.getElementById('nco-site').value = fields.site;
-    if(fields.prenom) document.getElementById('nco-ct-prenom').value = fields.prenom;
-    if(fields.nom) document.getElementById('nco-ct-nom').value = fields.nom;
-    if(fields.fonction) document.getElementById('nco-ct-fonction').value = fields.fonction;
-    if(fields.tel) document.getElementById('nco-ct-tel').value = fields.tel;
-    if(fields.email) document.getElementById('nco-ct-email').value = fields.email;
   } else if(target.mode === 'existing'){
+    if(addingContactFor !== target.companyId) resetContactForm(null); // idem
     addingContactFor = target.companyId;
     editingContactId = null;
+    if(fields.prenom) contactForm.prenom = fields.prenom;
+    if(fields.nom) contactForm.nom = fields.nom;
+    if(fields.fonction) contactForm.fonction = fields.fonction;
+    if(fields.tel) contactForm.tel = fields.tel;
+    if(fields.email) contactForm.email = fields.email;
     render();
-    if(fields.prenom) document.getElementById('nc-prenom').value = fields.prenom;
-    if(fields.nom) document.getElementById('nc-nom').value = fields.nom;
-    if(fields.fonction) document.getElementById('nc-fonction').value = fields.fonction;
-    if(fields.tel) document.getElementById('nc-tel').value = fields.tel;
-    if(fields.email) document.getElementById('nc-email').value = fields.email;
     // Compléter les champs vides de l'entreprise elle-même si l'info manquait
     const co = byId(DB.companies, target.companyId);
     if(co){
