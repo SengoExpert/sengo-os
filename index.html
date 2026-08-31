@@ -4989,6 +4989,49 @@ IMPORT_PACKCOLLE_TOP300.forEach((row, idx) => {
 });
 console.log('Import PACK_colle (top 300) :', importReport.packcolleNew||0, 'nouvelles,', importReport.packcolleUpdated||0, 'enrichies');
 
+/* ---------------------------- SECTEURS D'ACTIVITÉ — simplification ----------------------------
+   Les secteurs bruts (surtout ceux issus des codes NAF des gros imports Excel) sont beaucoup
+   trop détaillés pour être utiles au quotidien ("Fabrication de plaques, feuilles, tubes et
+   profilés en matières plastiques"...). On les regroupe en 9 catégories simples et parlantes,
+   alignées sur les métiers réels de SENGO EXPERT (BTP/TP en tête, puis emballage, agro...). */
+const SECTEUR_SIMPLE_EXACT = {
+  'TP / Terrassement / VRD': 'TP / Terrassement',
+  'Génie civil / Gros œuvre': 'BTP / Gros œuvre',
+  'Voirie / Enrobés': 'Voirie / Enrobés',
+  'Carrières / Granulats': 'Carrières / Granulats',
+  'Carrières / Granulats / Béton': 'Carrières / Granulats',
+  'Négoce de matériaux BTP': 'Distributeur / Négoce',
+  'Loueur de matériel BTP': 'BTP / Gros œuvre',
+  'Démolition / Sciage-carottage': 'BTP / Gros œuvre',
+  'Marbrerie / Taille de pierre': 'BTP / Gros œuvre',
+  'Emballage industriel': 'Emballage industriel',
+  'Emballage / Logistique': 'Emballage industriel',
+  'Agro-industrie': 'Agroalimentaire',
+  'Agroalimentaire': 'Agroalimentaire',
+  'Agroalimentaire / Industrie': 'Agroalimentaire',
+  'Distribution / Logistique': 'Logistique',
+  'Spiritueux': 'Spiritueux',
+};
+const SECTEUR_SIMPLE_KEYWORDS = [
+  // ordre important : les mots-clés les plus spécifiques d'abord
+  [/vinif|vin effervescent|boisson[s]? alcoolique|distill|bière|brasserie/i, 'Spiritueux'],
+  [/aliment|viande|volaille|charcuterie|boucherie|poisson|crustac|fromage|lait|beurre|boulanger|pâtisserie|biscuit|confiserie|chocolat|sucre|café|thé\b|meunerie|pâtes aliment|plats préparés|conserv|glace[s]? et sorbet|produits diét|pesticide|agrochimi|animaux de compagnie/i, 'Agroalimentaire'],
+  [/entreposage|stockage|transport[s]? routier|affrètement|logistique/i, 'Logistique'],
+  [/commerce de gros|commerce de détail|vente à distance|centrale[s]? d'achat|intermédiaires du commerce|négoce/i, 'Distributeur / Négoce'],
+  [/btp|terrassement|vrd|génie civil|gros œuvre|voirie|enrobé|carrière|granulat|démolition|marbrerie|taille de pierre|maçonnerie|charpente|menuiserie métallique|serrurerie|isolation|peinture et vitrerie|installation électrique/i, 'BTP / Gros œuvre'],
+  [/emballage|conditionnement|cartonnage|carton ondulé/i, 'Emballage industriel'],
+  [/fabrication|construction de|production de|manufactur/i, 'Producteur / Fabricant'],
+];
+function simplifySecteur(raw){
+  if(!raw) return 'Industrie';
+  if(SECTEUR_SIMPLE_EXACT[raw]) return SECTEUR_SIMPLE_EXACT[raw];
+  for(const [re, cat] of SECTEUR_SIMPLE_KEYWORDS){
+    if(re.test(raw)) return cat;
+  }
+  return 'Industrie'; // secteurs divers non classables (holding, conseil, assurance, édition…)
+}
+DB.companies.forEach(c => { c.secteurDetail = c.secteur; c.secteur = simplifySecteur(c.secteur); });
+
 
 
 /* ---------------------------- GÉOGRAPHIE ---------------------------- */
@@ -5415,11 +5458,17 @@ function haversineKm(lat1,lon1,lat2,lon2){
 }
 
 const SECTOR_COLORS = {
-  'Agro-industrie':'#1F6F6B',
-  'Distribution / Logistique':'#3E6E92',
+  'TP / Terrassement':'#8A6D3B',
+  'BTP / Gros œuvre':'#B15A18',
+  'Voirie / Enrobés':'#5C5C5C',
+  'Carrières / Granulats':'#7A6652',
+  'Emballage industriel':'#C2811F',
   'Agroalimentaire':'#3E7A4F',
-  'Emballage / Logistique':'#C2811F',
-  'Spiritueux':'#6247AA',
+  'Distributeur / Négoce':'#3E6E92',
+  'Logistique':'#1F6F6B',
+  'Producteur / Fabricant':'#6247AA',
+  'Spiritueux':'#9C3D6E',
+  'Industrie':'#8B8B8B',
 };
 const POTENTIEL_RADIUS = {fort:9, moyen:7, faible:5};
 function tailleCategorie(effectif){
@@ -5463,6 +5512,7 @@ let state = {
   activeTourneeId: null,
   pendingConfirm: null, // {message, onConfirmFn, payload} — confirmation interne (pas de confirm() natif)
   lightboxPhotoId: null, // id de la photo affichée en grand, le cas échéant
+  ocrStatus: null, // 'scanning' pendant la lecture d'une carte de visite
   editingTaskId: null, // id de la tâche en cours de modification (fenêtre dédiée)
   oppFilters: {statut:'tous', potentiel:'tous', q:'', companyId:null},
   oppExpandedId: null,
@@ -5867,6 +5917,24 @@ function renderInlineCompanyForm(){
           <option value="faible">Potentiel faible</option>
         </select>
       </div>
+      <div style="border-top:1px solid var(--line);margin-top:6px;padding-top:12px;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-500);font-weight:700;margin-bottom:8px;">Contact principal (facultatif)</div>
+        <div class="grid2">
+          <input id="nco-ct-prenom" placeholder="Prénom" />
+          <input id="nco-ct-nom" placeholder="Nom" />
+        </div>
+        <input id="nco-ct-fonction" placeholder="Fonction" style="margin-top:8px;" />
+        <div class="grid2" style="margin-top:8px;">
+          <input id="nco-ct-tel" placeholder="Téléphone" />
+          <input id="nco-ct-email" placeholder="Email" />
+        </div>
+        <select id="nco-ct-role" style="margin-top:8px;">
+          <option value="decideur">Décideur</option>
+          <option value="prescripteur">Prescripteur</option>
+          <option value="utilisateur">Utilisateur</option>
+          <option value="autre" selected>Autre</option>
+        </select>
+      </div>
       <div class="inline-form-actions">
         <button class="btn" onclick="toggleAddCompany()">Annuler</button>
         <button class="btn primary" onclick="submitNewCompany()">Créer l'entreprise</button>
@@ -5892,8 +5960,24 @@ function submitNewCompany(){
     resume:'', watch:[], strategie:'',
   };
   DB.companies.push(co);
+
+  const ctPrenom = document.getElementById('nco-ct-prenom').value.trim();
+  const ctNom = document.getElementById('nco-ct-nom').value.trim();
+  let contactCree = false;
+  if(ctPrenom || ctNom){
+    DB.contacts.push({
+      id: 'k'+(DB.contacts.length+1)+'-'+Math.random().toString(36).slice(2,5),
+      companyId: id, prenom: ctPrenom, nom: ctNom,
+      fonction: document.getElementById('nco-ct-fonction').value.trim(),
+      tel: document.getElementById('nco-ct-tel').value.trim(),
+      email: document.getElementById('nco-ct-email').value.trim(),
+      role: document.getElementById('nco-ct-role').value, notes:'',
+    });
+    contactCree = true;
+  }
+
   addingCompanyOpen = false;
-  toast('Entreprise créée.');
+  toast('Entreprise créée' + (contactCree ? ' avec son contact.' : '.'));
   selectCompany(id);
   state.activeNav = 'aujourdhui';
   render();
@@ -6063,6 +6147,7 @@ function renderTopbar(){
         <button class="onedrive-btn" onclick="connectOneDrive()" title="${oneDriveStatus==='error' ? 'Erreur de connexion — cliquer pour réessayer : '+esc(oneDriveError) : 'OneDrive déconnecté — cliquer pour connecter'}">☁️</button>
       `}
     </div>
+    <input type="file" id="ocr-scan-input" accept="image/*" capture="environment" style="display:none;" onchange="handleBusinessCardScan(this)">
     <div class="search-wrap">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input placeholder="Rechercher…" value="${esc(state.searchQuery)}"
@@ -6274,6 +6359,11 @@ function renderEntreprise(co){
   <div class="card">
     <h2>Entreprise</h2>
     <div class="field-row"><label>Raison sociale</label><input value="${esc(co.nom)}" onblur="updateCompanyField('${co.id}','nom',this.value)"></div>
+    <div class="field-row"><label>Secteur</label>
+      <select onchange="updateCompanyField('${co.id}','secteur',this.value)">
+        ${Object.keys(SECTOR_COLORS).map(s=>`<option value="${esc(s)}" ${co.secteur===s?'selected':''}>${esc(s)}</option>`).join('')}
+      </select>
+    </div>
     <div class="field-row"><label>Activité</label><input value="${esc(co.activite)}" onblur="updateCompanyField('${co.id}','activite',this.value)"></div>
     <div class="field-row"><label>Adresse</label><input value="${esc(co.adresse)}" onblur="updateCompanyField('${co.id}','adresse',this.value)"></div>
     <div class="field-row"><label>Téléphone</label><input class="mono" value="${esc(co.tel)}" onblur="updateCompanyField('${co.id}','tel',this.value)"></div>
@@ -6300,7 +6390,7 @@ function renderEntreprise(co){
 function renderContacts(co, contacts){
   return `
   <div class="card" id="contact-block">
-    <h2>Contacts <button class="btn ghost small" onclick="toggleAddContact('${co.id}')">+ Ajouter</button></h2>
+    <h2>Contacts <button class="btn ghost small" onclick="triggerScanBusinessCard('existing','${co.id}')" ${state.ocrStatus?'disabled':''} style="margin-right:4px;">${state.ocrStatus?'⏳':'📇 Scanner une carte'}</button><button class="btn ghost small" onclick="toggleAddContact('${co.id}')">+ Ajouter</button></h2>
     ${contacts.length ? contacts.map(k => editingContactId===k.id ? renderContactForm(co.id, k) : `
       <div class="contact-card">
         <div class="ct-top">
@@ -6767,7 +6857,10 @@ function renderEntreprisesPage(){
         <div class="co-name" style="font-size:19px;">Entreprises</div>
         <div style="font-size:12.5px;color:var(--ink-500);">${list.length} sur ${DB.companies.length} — triez une colonne en cliquant sur son en-tête</div>
       </div>
-      <button class="btn primary" onclick="toggleAddCompany()">${addingCompanyOpen?'Annuler':'+ Créer une entreprise'}</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="triggerScanBusinessCard('new')" ${state.ocrStatus?'disabled':''}>${state.ocrStatus?'⏳ Lecture…':'📇 Scanner une carte'}</button>
+        <button class="btn primary" onclick="toggleAddCompany()">${addingCompanyOpen?'Annuler':'+ Créer une entreprise'}</button>
+      </div>
     </div>
 
     ${renderInlineCompanyForm()}
@@ -7979,6 +8072,135 @@ async function loadMsalLibrary(){
     }
   }
   return false;
+}
+
+/* ---------------------------- SCAN DE CARTE DE VISITE (OCR local, sans serveur) ---------------------------- */
+const OCR_CDNS = [
+  'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
+  'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js',
+];
+let ocrLibLoaded = false;
+async function loadOcrLibrary(){
+  if(ocrLibLoaded) return true;
+  for(const url of OCR_CDNS){
+    try{
+      await loadScriptOnce(url);
+      if(typeof Tesseract !== 'undefined'){ ocrLibLoaded = true; return true; }
+    }catch(e){
+      console.warn('Serveur OCR indisponible, tentative suivante…', e);
+    }
+  }
+  return false;
+}
+
+/* Extraction heuristique des champs à partir du texte brut reconnu sur la carte de visite.
+   Ce n'est jamais garanti à 100% — les champs proposés sont à vérifier avant enregistrement. */
+function parseBusinessCardText(text){
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const result = {prenom:'', nom:'', fonction:'', tel:'', email:'', site:'', societe:''};
+
+  const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  if(emailMatch) result.email = emailMatch[0].toLowerCase();
+
+  const phoneMatches = text.match(/(?:\+33|0)\s?[1-9](?:[\s.\-]?\d{2}){4}/g);
+  if(phoneMatches && phoneMatches.length) result.tel = phoneMatches[0].replace(/\s+/g,' ').trim();
+
+  const siteMatch = text.match(/(?:https?:\/\/)?(?:www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?/g) || [];
+  // Écarter les fragments qui font en fait partie de l'adresse email déjà détectée,
+  // et préférer un candidat qui ressemble vraiment à un site (www. ou http)
+  const siteCandidates = siteMatch.filter(s => !(result.email && result.email.includes(s)) && s.length>4);
+  const bestSite = siteCandidates.find(s => /^(https?:\/\/|www\.)/i.test(s)) || siteCandidates[0];
+  if(bestSite) result.site = bestSite;
+
+  // Ligne(s) tout en majuscules et sans chiffres -> probablement la société
+  const societeLine = lines.find(l => l.length>2 && l === l.toUpperCase() && /[A-ZÀ-Ü]/.test(l) && !/\d{3}/.test(l) && !l.includes('@'));
+  if(societeLine) result.societe = societeLine;
+
+  // Ligne avec deux mots capitalisés (Prénom Nom) -> probablement la personne
+  const nameLine = lines.find(l => /^[A-ZÀ-Ü][a-zà-ü'-]+\s+[A-ZÀ-Ü][a-zà-üA-ZÀ-Ü'-]+$/.test(l) && l !== societeLine);
+  if(nameLine){
+    const parts = nameLine.split(/\s+/);
+    result.prenom = parts[0];
+    result.nom = parts.slice(1).join(' ');
+  }
+
+  // La ligne juste après le nom est souvent la fonction
+  if(nameLine){
+    const idx = lines.indexOf(nameLine);
+    const next = lines[idx+1];
+    const digitCount = next ? (next.match(/\d/g)||[]).length : 0;
+    if(next && next!==societeLine && !next.includes('@') && digitCount<4 && next.length<60){
+      result.fonction = next;
+    }
+  }
+
+  return result;
+}
+
+let ocrScanTarget = null; // {mode:'new'|'existing', companyId}
+function triggerScanBusinessCard(mode, companyId){
+  ocrScanTarget = {mode, companyId};
+  const input = document.getElementById('ocr-scan-input');
+  if(input) input.click();
+}
+async function handleBusinessCardScan(input){
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file || !ocrScanTarget) return;
+  const target = ocrScanTarget;
+  ocrScanTarget = null;
+
+  state.ocrStatus = 'scanning';
+  render();
+  try{
+    const loaded = await loadOcrLibrary();
+    if(!loaded){
+      toast("Lecture de carte indisponible pour le moment (vérifiez votre connexion), réessayez.");
+      state.ocrStatus = null;
+      render();
+      return;
+    }
+    const { data: { text } } = await Tesseract.recognize(file, 'fra');
+    const fields = parseBusinessCardText(text);
+    applyOcrFieldsToForm(target, fields);
+    toast('Carte lue — vérifiez les informations proposées avant d\'enregistrer.');
+  }catch(e){
+    console.error('Lecture de carte échouée', e);
+    toast('La lecture de la carte a échoué. Réessayez avec une photo plus nette.');
+  }
+  state.ocrStatus = null;
+  render();
+}
+function applyOcrFieldsToForm(target, fields){
+  if(target.mode === 'new'){
+    addingCompanyOpen = true;
+    render();
+    if(fields.societe) document.getElementById('nco-nom').value = fields.societe;
+    if(fields.tel) document.getElementById('nco-tel').value = fields.tel;
+    if(fields.site) document.getElementById('nco-site').value = fields.site;
+    if(fields.prenom) document.getElementById('nco-ct-prenom').value = fields.prenom;
+    if(fields.nom) document.getElementById('nco-ct-nom').value = fields.nom;
+    if(fields.fonction) document.getElementById('nco-ct-fonction').value = fields.fonction;
+    if(fields.tel) document.getElementById('nco-ct-tel').value = fields.tel;
+    if(fields.email) document.getElementById('nco-ct-email').value = fields.email;
+  } else if(target.mode === 'existing'){
+    addingContactFor = target.companyId;
+    editingContactId = null;
+    render();
+    if(fields.prenom) document.getElementById('nc-prenom').value = fields.prenom;
+    if(fields.nom) document.getElementById('nc-nom').value = fields.nom;
+    if(fields.fonction) document.getElementById('nc-fonction').value = fields.fonction;
+    if(fields.tel) document.getElementById('nc-tel').value = fields.tel;
+    if(fields.email) document.getElementById('nc-email').value = fields.email;
+    // Compléter les champs vides de l'entreprise elle-même si l'info manquait
+    const co = byId(DB.companies, target.companyId);
+    if(co){
+      if(!co.tel && fields.tel) co.tel = fields.tel;
+      if(!co.site && fields.site) co.site = fields.site;
+    }
+    const block = document.getElementById('contact-block');
+    if(block) block.scrollIntoView({behavior:'smooth', block:'start'});
+  }
 }
 
 let msalInstance = null;
