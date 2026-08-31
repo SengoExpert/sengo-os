@@ -84,7 +84,7 @@
     color:#fff;border-radius:7px;padding:7px 10px;font-size:12.5px;max-width:180px;min-width:0;
   }
   .prestataire-wrap select option{color:var(--ink-900);background:#fff;}
-  .onedrive-wrap{flex:none;}
+  .onedrive-wrap{flex:none;display:flex;gap:6px;}
   .onedrive-btn{
     width:32px;height:32px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;
     background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);font-size:14px;line-height:1;
@@ -6242,6 +6242,7 @@ function renderTopbar(){
     </div>
     <div class="onedrive-wrap">
       ${oneDriveStatus==='connected' ? `
+        <button class="onedrive-btn" onclick="reloadFromOneDrive()" title="Recharger les dernières données depuis OneDrive (utile après une modification faite sur un autre appareil)">🔄</button>
         <button class="onedrive-btn connected" onclick="disconnectOneDrive()" title="${oneDriveError ? 'Dernière synchro en erreur : '+esc(oneDriveError) : (oneDriveLastSync ? 'OneDrive connecté — dernière synchro : '+oneDriveLastSync.toLocaleTimeString('fr-FR') : 'OneDrive connecté')}">☁️</button>
       ` : oneDriveStatus==='connecting' ? `
         <button class="onedrive-btn" disabled title="Connexion à OneDrive en cours…">☁️</button>
@@ -8600,6 +8601,39 @@ function scheduleAutoSave(){
   // fermant le clavier et réinitialisant tout défilement en cours à chaque cycle, même sans
   // aucune action de l'utilisateur.
   __autoSaveTimer = setTimeout(() => { saveToOneDrive(); }, 2000);
+}
+
+/* Rechargement manuel — l'app ne vérifie une éventuelle mise à jour OneDrive faite depuis un
+   autre appareil qu'une seule fois, à la connexion. Si l'app reste ouverte longtemps pendant
+   qu'une modification est faite ailleurs (téléphone, autre ordinateur), elle ne le sait jamais
+   toute seule. Ce bouton force la remontée : on sauvegarde d'abord ce qui est en cours ici
+   (pour ne rien perdre), puis on récupère la dernière version enregistrée sur OneDrive. */
+async function reloadFromOneDrive(){
+  if(oneDriveStatus !== 'connected'){
+    toast('Connectez-vous d\'abord à OneDrive pour pouvoir recharger.');
+    return;
+  }
+  oneDriveStatus = 'connecting';
+  render();
+  try{
+    clearTimeout(__autoSaveTimer);
+    await saveToOneDrive(); // met d'abord en sécurité ce qui vient d'être modifié ici
+    const snap = await downloadFromOneDrive();
+    if(snap){
+      applySnapshot(snap);
+      state.selectedCompanyId = computeStartingCompanyId();
+      toast('Données rechargées depuis OneDrive.');
+    } else {
+      toast('Aucune donnée trouvée sur OneDrive pour le moment.');
+    }
+    oneDriveStatus = 'connected';
+  }catch(e){
+    console.error('Rechargement OneDrive échoué', e);
+    oneDriveStatus = 'connected';
+    oneDriveError = e.message || String(e);
+    toast('Le rechargement a échoué — réessayez.');
+  }
+  render();
 }
 
 async function connectOneDrive(){
