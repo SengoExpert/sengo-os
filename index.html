@@ -5733,9 +5733,10 @@ function primaryContactWith(cid, field){
   return contacts.find(k => k[field] && k[field] !== '—');
 }
 function callPrimaryContact(cid){
-  const k = primaryContactWith(cid, 'tel');
-  if(!k){ toast('Aucun numéro de téléphone enregistré pour ce compte.'); return; }
-  openExternal('tel:' + k.tel);
+  const k = primaryContactWith(cid, 'tel') || primaryContactWith(cid, 'mobile');
+  const numero = k ? (k.tel && k.tel!=='—' ? k.tel : k.mobile) : null;
+  if(!numero){ toast('Aucun numéro de téléphone enregistré pour ce compte.'); return; }
+  openExternal('tel:' + numero);
 }
 function emailPrimaryContact(cid){
   const k = primaryContactWith(cid, 'email');
@@ -6040,9 +6041,9 @@ function toggleStatutClient(cid){
 
 /* Création / suppression d'entreprise */
 let addingCompanyOpen = false;
-let newCompanyForm = {nom:'', secteur:'', activite:'', rue:'', codePostal:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctEmail:'', ctRole:'autre'};
+let newCompanyForm = {nom:'', secteur:'', activite:'', rue:'', codePostal:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctMobile:'', ctEmail:'', ctRole:'autre'};
 function resetNewCompanyForm(){
-  newCompanyForm = {nom:'', secteur:'', activite:'', rue:'', codePostal:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctEmail:'', ctRole:'autre'};
+  newCompanyForm = {nom:'', secteur:'', activite:'', rue:'', codePostal:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctMobile:'', ctEmail:'', ctRole:'autre'};
 }
 function toggleAddCompany(){
   addingCompanyOpen = !addingCompanyOpen;
@@ -6097,9 +6098,10 @@ function renderInlineCompanyForm(){
         </div>
         <input id="nco-ct-fonction" placeholder="Fonction" style="margin-top:8px;" value="${esc(newCompanyForm.ctFonction)}" oninput="newCompanyForm.ctFonction=this.value">
         <div class="grid2" style="margin-top:8px;">
-          <input id="nco-ct-tel" placeholder="Téléphone" value="${esc(newCompanyForm.ctTel)}" oninput="newCompanyForm.ctTel=this.value">
-          <input id="nco-ct-email" placeholder="Email" value="${esc(newCompanyForm.ctEmail)}" oninput="newCompanyForm.ctEmail=this.value">
+          <input id="nco-ct-tel" placeholder="Téléphone fixe" value="${esc(newCompanyForm.ctTel)}" oninput="newCompanyForm.ctTel=this.value">
+          <input id="nco-ct-mobile" placeholder="Portable" value="${esc(newCompanyForm.ctMobile)}" oninput="newCompanyForm.ctMobile=this.value">
         </div>
+        <input id="nco-ct-email" placeholder="Email" style="margin-top:8px;" value="${esc(newCompanyForm.ctEmail)}" oninput="newCompanyForm.ctEmail=this.value">
         <select id="nco-ct-role" style="margin-top:8px;" onchange="newCompanyForm.ctRole=this.value">
           <option value="decideur" ${newCompanyForm.ctRole==='decideur'?'selected':''}>Décideur</option>
           <option value="prescripteur" ${newCompanyForm.ctRole==='prescripteur'?'selected':''}>Prescripteur</option>
@@ -6160,6 +6162,7 @@ function submitNewCompany(){
       companyId: id, prenom: ctPrenom, nom: ctNom,
       fonction: newCompanyForm.ctFonction.trim(),
       tel: newCompanyForm.ctTel.trim(),
+      mobile: newCompanyForm.ctMobile.trim(),
       email: newCompanyForm.ctEmail.trim(),
       role: newCompanyForm.ctRole, notes:'',
     });
@@ -6232,11 +6235,11 @@ function changeOppStatus(oid, value){
 }
 
 let addingContactFor = null;
-let contactForm = {prenom:'', nom:'', fonction:'', tel:'', email:'', role:'autre', notes:''};
+let contactForm = {prenom:'', nom:'', fonction:'', tel:'', mobile:'', email:'', role:'autre', notes:''};
 function resetContactForm(k){
   contactForm = k
-    ? {prenom:k.prenom||'', nom:k.nom||'', fonction:k.fonction||'', tel:k.tel||'', email:k.email||'', role:k.role||'autre', notes:k.notes||''}
-    : {prenom:'', nom:'', fonction:'', tel:'', email:'', role:'autre', notes:''};
+    ? {prenom:k.prenom||'', nom:k.nom||'', fonction:k.fonction||'', tel:k.tel||'', mobile:k.mobile||'', email:k.email||'', role:k.role||'autre', notes:k.notes||''}
+    : {prenom:'', nom:'', fonction:'', tel:'', mobile:'', email:'', role:'autre', notes:''};
 }
 function toggleAddContact(cid){
   addingContactFor = addingContactFor === cid ? null : cid;
@@ -6248,17 +6251,18 @@ function submitContact(cid, kid){
   const nom = contactForm.nom.trim();
   const fonction = contactForm.fonction.trim();
   const tel = contactForm.tel.trim();
+  const mobile = contactForm.mobile.trim();
   const email = contactForm.email.trim();
   const role = contactForm.role;
   const notes = contactForm.notes.trim();
   if(!prenom){ toast('Le prénom est requis.'); return; }
   if(kid){
     const k = byId(DB.contacts, kid);
-    Object.assign(k, {prenom, nom, fonction, tel, email, role, notes});
+    Object.assign(k, {prenom, nom, fonction, tel, mobile, email, role, notes});
     editingContactId = null;
     toast('Contact mis à jour.');
   } else {
-    DB.contacts.push({id:'k'+(DB.contacts.length+1)+'-'+Math.random().toString(36).slice(2,5), companyId:cid, prenom, nom, fonction, tel, email, role, notes});
+    DB.contacts.push({id:'k'+(DB.contacts.length+1)+'-'+Math.random().toString(36).slice(2,5), companyId:cid, prenom, nom, fonction, tel, mobile, email, role, notes});
     addingContactFor = null;
     toast('Contact ajouté.');
   }
@@ -6665,6 +6669,7 @@ function renderContacts(co, contacts){
         </div>
         <div class="ct-coords">
           ${k.tel && k.tel!=='—' ? `<a class="ct-link" href="tel:${esc(k.tel)}">📞 ${esc(k.tel)}</a>`:''}
+          ${k.mobile ? `<a class="ct-link" href="tel:${esc(k.mobile)}">📱 ${esc(k.mobile)}</a>`:''}
           ${k.email ? `<a class="ct-link" href="mailto:${esc(k.email)}">✉️ ${esc(k.email)}</a>`:''}
         </div>
         ${k.notes ? `<div class="ct-notes">${esc(k.notes)}</div>` : ''}
@@ -6708,9 +6713,10 @@ function renderContactForm(cid, k){
     </div>
     <input id="nc-fonction" placeholder="Fonction" value="${esc(contactForm.fonction)}" oninput="contactForm.fonction=this.value">
     <div class="grid2">
-      <input id="nc-tel" placeholder="Téléphone" value="${esc(contactForm.tel)}" oninput="contactForm.tel=this.value">
-      <input id="nc-email" placeholder="Email" value="${esc(contactForm.email)}" oninput="contactForm.email=this.value">
+      <input id="nc-tel" placeholder="Téléphone fixe" value="${esc(contactForm.tel)}" oninput="contactForm.tel=this.value">
+      <input id="nc-mobile" placeholder="Portable" value="${esc(contactForm.mobile)}" oninput="contactForm.mobile=this.value">
     </div>
+    <input id="nc-email" placeholder="Email" value="${esc(contactForm.email)}" oninput="contactForm.email=this.value">
     <select id="nc-role" onchange="contactForm.role=this.value">
       <option value="decideur" ${contactForm.role==='decideur'?'selected':''}>Décideur</option>
       <option value="prescripteur" ${contactForm.role==='prescripteur'?'selected':''}>Prescripteur</option>
@@ -7143,7 +7149,7 @@ function renderEntreprisesPage(){
       </div>
       <input type="file" id="import-backup-input" accept="application/json" style="display:none;" onchange="importDataBackup(this)">
       <input type="file" id="import-contacts-input" accept=".vcf,.vcard,text/vcard" style="display:none;" onchange="importContactsVCF(this)">
-      <input type="file" id="import-onenote-input" accept=".docx" style="display:none;" onchange="importOneNoteDocx(this)">
+      <input type="file" id="import-onenote-input" accept=".docx,.pdf" style="display:none;" onchange="importOneNoteDocx(this)">
     </div>
 
     ${renderInlineCompanyForm()}
@@ -7312,7 +7318,11 @@ function renderContactsPage(){
               <td>${esc(k.fonction)||'—'}</td>
               <td>${k._co? esc(k._co.nom) : '—'}</td>
               <td><span class="ct-role ${k.role}" style="display:inline-block;">${esc(ROLE_LABELS[k.role]||k.role)}</span></td>
-              <td class="mono">${k.tel && k.tel!=='—' ? `<a class="ct-link" href="tel:${esc(k.tel)}" onclick="event.stopPropagation()">${esc(k.tel)}</a>` : '—'}</td>
+              <td class="mono">
+                ${k.tel && k.tel!=='—' ? `<a class="ct-link" href="tel:${esc(k.tel)}" onclick="event.stopPropagation()">📞 ${esc(k.tel)}</a>` : ''}
+                ${k.mobile ? `<div><a class="ct-link" href="tel:${esc(k.mobile)}" onclick="event.stopPropagation()">📱 ${esc(k.mobile)}</a></div>` : ''}
+                ${(!k.tel || k.tel==='—') && !k.mobile ? '—' : ''}
+              </td>
               <td>${k.email ? `<a class="ct-link" href="mailto:${esc(k.email)}" onclick="event.stopPropagation()">${esc(k.email)}</a>` : '—'}</td>
               <td><button class="btn small primary" onclick="event.stopPropagation();editContactFrom('${k.companyId}','${k.id}')">✎ Modifier</button></td>
             </tr>`).join('')}
@@ -8046,7 +8056,7 @@ function renderTerrainView(){
             </div>
             <div class="ts-addr">${esc(co.adresse)}</div>
             <div class="ts-actions">
-              ${contact && contact.tel && contact.tel!=='—' ? `<a class="btn small" href="tel:${esc(contact.tel)}">📞 ${esc(contact.prenom)}</a>` : ''}
+              ${contact && ((contact.tel && contact.tel!=='—') || contact.mobile) ? `<a class="btn small" href="tel:${esc(contact.tel && contact.tel!=='—' ? contact.tel : contact.mobile)}">📞 ${esc(contact.prenom)}</a>` : ''}
               <a class="btn small" href="${mapUrl}" target="_blank" rel="noopener">🧭 Itinéraire</a>
               <button class="btn small" onclick="selectCompany('${co.id}');state.activeNav='aujourdhui';render()">Voir le compte</button>
               ${s.statut!=='terminee' ? `<button class="btn small primary" onclick="openFinish('${s.id}')">✓ Terminer l'étape</button>` : ''}
@@ -8499,6 +8509,28 @@ async function loadDocxLibrary(){
   return false;
 }
 
+const PDF_CDNS = [
+  { js: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js', worker: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js' },
+  { js: 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js', worker: 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js' },
+];
+let pdfLibLoaded = false;
+async function loadPdfLibrary(){
+  if(pdfLibLoaded) return true;
+  for(const src of PDF_CDNS){
+    try{
+      await loadScriptOnce(src.js);
+      if(typeof pdfjsLib !== 'undefined'){
+        pdfjsLib.GlobalWorkerOptions.workerSrc = src.worker;
+        pdfLibLoaded = true;
+        return true;
+      }
+    }catch(e){
+      console.warn('Serveur de lecture PDF indisponible, tentative suivante…', e);
+    }
+  }
+  return false;
+}
+
 /* Convertit la photo en niveaux de gris avec un contraste accentué avant lecture —
    une carte de visite photographiée (reflets, éclairage inégal, angle) est nettement
    mieux reconnue une fois nettoyée de cette façon plutôt que lue telle quelle. */
@@ -8552,13 +8584,23 @@ function isPlausibleText(str, minLetterRatio){
    Ce n'est jamais garanti à 100% — les champs proposés sont à vérifier avant enregistrement. */
 function parseBusinessCardText(text){
   const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
-  const result = {prenom:'', nom:'', fonction:'', tel:'', email:'', site:'', societe:'', rue:'', codePostal:'', ville:''};
+  const result = {prenom:'', nom:'', fonction:'', tel:'', mobile:'', email:'', site:'', societe:'', rue:'', codePostal:'', ville:''};
 
   const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
   if(emailMatch) result.email = emailMatch[0].toLowerCase();
 
   const phoneMatches = text.match(/(?:\+33|0)\s?[1-9](?:[\s.\-]?\d{2}){4}/g);
-  if(phoneMatches && phoneMatches.length) result.tel = phoneMatches[0].replace(/\s+/g,' ').trim();
+  if(phoneMatches && phoneMatches.length){
+    // En France, un numéro commençant par 06 ou 07 (ou +336 / +337) est presque toujours un
+    // portable — les autres préfixes (01 à 05, 09) sont des lignes fixes.
+    const cleaned = phoneMatches.map(n => n.replace(/\s+/g,' ').trim());
+    const isMobile = n => /^(?:\+33[67]|0[67])/.test(n.replace(/[^\d+]/g,''));
+    const mobiles = cleaned.filter(isMobile);
+    const fixes = cleaned.filter(n => !isMobile(n));
+    if(mobiles.length) result.mobile = mobiles[0];
+    if(fixes.length) result.tel = fixes[0];
+    if(!fixes.length && mobiles.length>1) result.tel = mobiles[1]; // deux portables sur la carte : le second sert de secours en "tel"
+  }
 
   const siteMatch = text.match(/(?:https?:\/\/)?(?:www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?/g) || [];
   // Écarter les fragments qui font en fait partie de l'adresse email déjà détectée,
@@ -8707,6 +8749,7 @@ function applyOcrFieldsToForm(target, fields){
     if(fields.nom) newCompanyForm.ctNom = fields.nom;
     if(fields.fonction) newCompanyForm.ctFonction = fields.fonction;
     if(fields.tel) newCompanyForm.ctTel = fields.tel;
+    if(fields.mobile) newCompanyForm.ctMobile = fields.mobile;
     if(fields.email) newCompanyForm.ctEmail = fields.email;
     render();
   } else if(target.mode === 'existing'){
@@ -8717,6 +8760,7 @@ function applyOcrFieldsToForm(target, fields){
     if(fields.nom) contactForm.nom = fields.nom;
     if(fields.fonction) contactForm.fonction = fields.fonction;
     if(fields.tel) contactForm.tel = fields.tel;
+    if(fields.mobile) contactForm.mobile = fields.mobile;
     if(fields.email) contactForm.email = fields.email;
     render();
     // Compléter les champs vides de l'entreprise elle-même si l'info manquait
@@ -8875,11 +8919,12 @@ function parseVCF(text){
         lines.push(line);
       }
     });
-    const card = {fn:'', org:'', title:'', tel:'', email:''};
+    const card = {fn:'', org:'', title:'', tel:'', mobile:'', email:''};
     lines.forEach(line => {
       const idx = line.indexOf(':');
       if(idx<0) return;
-      const key = line.slice(0, idx).split(';')[0].toUpperCase();
+      const fullKey = line.slice(0, idx).toUpperCase();
+      const key = fullKey.split(';')[0];
       const val = line.slice(idx+1);
       if(key==='FN' && !card.fn) card.fn = decodeVCardValue(val);
       else if(key==='N' && !card.fn){
@@ -8888,7 +8933,11 @@ function parseVCF(text){
       }
       else if(key==='ORG' && !card.org) card.org = decodeVCardValue(val).split(';')[0];
       else if(key==='TITLE' && !card.title) card.title = decodeVCardValue(val);
-      else if(key==='TEL' && !card.tel) card.tel = val.trim();
+      else if(key==='TEL'){
+        const isCell = /CELL|MOBILE/.test(fullKey);
+        if(isCell && !card.mobile) card.mobile = val.trim();
+        else if(!isCell && !card.tel) card.tel = val.trim();
+      }
       else if(key==='EMAIL' && !card.email) card.email = val.trim().toLowerCase();
     });
     return card;
@@ -8920,12 +8969,12 @@ function importContactsVCF(input){
       const seen = new Map();
       let doublons = 0;
       proCards.forEach(c => {
-        const keys = [normPhoneLoose(c.tel), c.email, normKeyLoose(c.fn)+normKeyLoose(c.org)].filter(Boolean);
+        const keys = [normPhoneLoose(c.tel), normPhoneLoose(c.mobile), c.email, normKeyLoose(c.fn)+normKeyLoose(c.org)].filter(Boolean);
         const existingKey = keys.find(k => seen.has(k));
         if(existingKey){
           const existing = seen.get(existingKey);
-          const scoreNew = [c.tel,c.email,c.title,c.org].filter(Boolean).length;
-          const scoreOld = [existing.tel,existing.email,existing.title,existing.org].filter(Boolean).length;
+          const scoreNew = [c.tel,c.mobile,c.email,c.title,c.org].filter(Boolean).length;
+          const scoreOld = [existing.tel,existing.mobile,existing.email,existing.title,existing.org].filter(Boolean).length;
           if(scoreNew > scoreOld){
             keys.forEach(k => seen.set(k, c));
           }
@@ -8964,7 +9013,7 @@ function importContactsVCF(input){
         DB.contacts.push({
           id: gen_id_client('newcontk'), companyId: co.id,
           prenom: prenom||'', nom: rest.join(' '),
-          fonction: c.title||'', tel: c.tel||'', email: c.email||'',
+          fonction: c.title||'', tel: c.tel||'', mobile: c.mobile||'', email: c.email||'',
           role: 'autre', notes: '',
         });
       });
@@ -8996,41 +9045,76 @@ function triggerImportOneNote(){
   if(input) input.click();
 }
 
+async function parseDocxToCandidates(arrayBuffer){
+  const result = await mammoth.convertToHtml({arrayBuffer});
+  const container = document.createElement('div');
+  container.innerHTML = result.value;
+  // Chaque titre de page OneNote devient, dans le Word exporté, un titre (H1/H2/H3) — on
+  // découpe donc le document sur ces titres pour retrouver une note par page d'origine.
+  const candidates = [];
+  let current = null;
+  Array.from(container.children).forEach(el => {
+    if(/^H[1-3]$/.test(el.tagName)){
+      if(current && (current.title || current.content.trim())) candidates.push(current);
+      current = {title: el.textContent.trim(), content: ''};
+    } else if(current){
+      const text = el.textContent.trim();
+      if(text) current.content += (current.content?'\n':'') + text;
+    }
+  });
+  if(current && (current.title || current.content.trim())) candidates.push(current);
+  return candidates;
+}
+
+async function parsePdfToCandidates(arrayBuffer){
+  // Quand OneNote exporte/imprime en PDF, chaque page OneNote devient une (ou plusieurs) page(s)
+  // PDF, avec le titre de la page en première ligne — on s'appuie donc sur les sauts de page PDF
+  // plutôt que sur des styles de titre (qui n'existent pas dans un PDF).
+  const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+  const candidates = [];
+  for(let p=1; p<=pdf.numPages; p++){
+    const page = await pdf.getPage(p);
+    const textContent = await page.getTextContent();
+    // Regroupe les fragments de texte en lignes, à partir de leur position verticale
+    const lines = [];
+    let lastY = null;
+    textContent.items.forEach(item => {
+      const y = Math.round(item.transform[5]);
+      if(lastY === null || Math.abs(y - lastY) > 3){
+        lines.push(item.str);
+      } else {
+        lines[lines.length-1] += ' ' + item.str;
+      }
+      lastY = y;
+    });
+    const cleanLines = lines.map(l => l.trim()).filter(Boolean);
+    if(!cleanLines.length) continue;
+    candidates.push({ title: cleanLines[0], content: cleanLines.slice(1).join('\n') });
+  }
+  return candidates;
+}
+
 async function importOneNoteDocx(input){
   const file = input.files && input.files[0];
   input.value = '';
   if(!file) return;
+  const isPdf = /\.pdf$/i.test(file.name);
   state.ocrStatus = 'onenote'; // réutilise le même indicateur "chargement" que le scan de carte
   render();
   try{
-    const loaded = await loadDocxLibrary();
+    const loaded = isPdf ? await loadPdfLibrary() : await loadDocxLibrary();
     if(!loaded){
-      toast('Lecture des fichiers Word indisponible pour le moment (vérifiez votre connexion).');
+      toast(`Lecture des fichiers ${isPdf?'PDF':'Word'} indisponible pour le moment (vérifiez votre connexion).`);
       state.ocrStatus = null; render();
       return;
     }
     const arrayBuffer = await file.arrayBuffer();
-    const result = await mammoth.convertToHtml({arrayBuffer});
-    const container = document.createElement('div');
-    container.innerHTML = result.value;
-
-    // Chaque titre de page OneNote devient, dans le Word exporté, un titre (H1/H2/H3) — on
-    // découpe donc le document sur ces titres pour retrouver une note par page d'origine.
-    const candidates = [];
-    let current = null;
-    Array.from(container.children).forEach(el => {
-      if(/^H[1-3]$/.test(el.tagName)){
-        if(current && (current.title || current.content.trim())) candidates.push(current);
-        current = {title: el.textContent.trim(), content: ''};
-      } else if(current){
-        const text = el.textContent.trim();
-        if(text) current.content += (current.content?'\n':'') + text;
-      }
-    });
-    if(current && (current.title || current.content.trim())) candidates.push(current);
+    const candidates = isPdf ? await parsePdfToCandidates(arrayBuffer) : await parseDocxToCandidates(arrayBuffer);
 
     if(!candidates.length){
-      toast('Aucune page trouvée dans ce fichier — vérifiez qu\'il contient bien des titres de page (dans OneNote : Fichier > Exporter > Word).');
+      toast(isPdf
+        ? 'Aucune page trouvée dans ce PDF — vérifiez qu\'il contient bien du texte (pas seulement des images scannées).'
+        : 'Aucune page trouvée dans ce fichier — vérifiez qu\'il contient bien des titres de page (dans OneNote : Fichier > Exporter > Word).');
       state.ocrStatus = null; render();
       return;
     }
@@ -9052,8 +9136,8 @@ async function importOneNoteDocx(input){
     state.ocrStatus = null;
     render();
   }catch(err){
-    console.error('Lecture du fichier Word échouée', err);
-    toast('Fichier Word illisible ou invalide.');
+    console.error(`Lecture du fichier ${isPdf?'PDF':'Word'} échouée`, err);
+    toast(`Fichier ${isPdf?'PDF':'Word'} illisible ou invalide.`);
     state.ocrStatus = null;
     render();
   }
