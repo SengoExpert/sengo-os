@@ -7124,9 +7124,11 @@ function renderEntreprisesPage(){
         <div style="font-size:12.5px;color:var(--ink-500);">${list.length} sur ${DB.companies.length} — triez une colonne en cliquant sur son en-tête</div>
       </div>
       <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="triggerImportBackup()">⬆️ Importer</button>
         <button class="btn" onclick="triggerScanBusinessCard('new')" ${state.ocrStatus?'disabled':''}>${state.ocrStatus?'⏳ Lecture…':'📇 Scanner une carte'}</button>
         <button class="btn primary" onclick="toggleAddCompany()">${addingCompanyOpen?'Annuler':'+ Créer une entreprise'}</button>
       </div>
+      <input type="file" id="import-backup-input" accept="application/json" style="display:none;" onchange="importDataBackup(this)">
     </div>
 
     ${renderInlineCompanyForm()}
@@ -8821,10 +8823,13 @@ function importDataBackup(input){
   reader.onload = (e) => {
     try{
       const snap = JSON.parse(e.target.result);
-      applySnapshot(snap);
+      const countBefore = DB.companies.length;
+      mergeSnapshot(snap); // fusionne — ne remplace jamais ce qui existe déjà
       state.selectedCompanyId = computeStartingCompanyId();
-      toast('Sauvegarde importée (' + (snap.companies?.length||0) + ' entreprises).');
+      const added = DB.companies.length - countBefore;
+      toast(`Import réussi : ${added} nouvelle(s) entreprise(s) ajoutée(s) (${snap.companies?.length||0} dans le fichier).`, 3500);
       render();
+      saveNow(); // pousse immédiatement le résultat vers OneDrive
     }catch(err){
       toast('Fichier de sauvegarde invalide.');
     }
@@ -8833,16 +8838,36 @@ function importDataBackup(input){
   input.value = '';
 }
 
+function withTimeout(promise, ms, message){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message || 'Délai dépassé')), ms)),
+  ]);
+}
 async function getGraphToken(){
   if(!msalInstance) throw new Error('OneDrive indisponible (bibliothèque non chargée).');
   const account = msalInstance.getActiveAccount();
   if(!account) throw new Error('Non connecté.');
   try{
-    const resp = await msalInstance.acquireTokenSilent({scopes: ONEDRIVE_SCOPES, account});
+    const resp = await withTimeout(
+      msalInstance.acquireTokenSilent({scopes: ONEDRIVE_SCOPES, account}),
+      10000, 'Délai dépassé lors de la connexion silencieuse.'
+    );
     return resp.accessToken;
   }catch(e){
-    const resp = await msalInstance.acquireTokenPopup({scopes: ONEDRIVE_SCOPES});
-    return resp.accessToken;
+    // La fenêtre pop-up de connexion peut rester bloquée sans jamais revenir, en particulier
+    // dans une app installée sur l'écran d'accueil (mode "standalone") sur mobile — sans limite
+    // de temps ici, un clic sur "Enregistrer" pouvait alors sembler "ne rien faire" indéfiniment,
+    // sans aucun message d'erreur pour comprendre pourquoi.
+    try{
+      const resp = await withTimeout(
+        msalInstance.acquireTokenPopup({scopes: ONEDRIVE_SCOPES}),
+        15000, 'Délai dépassé lors de l\'ouverture de la fenêtre de connexion.'
+      );
+      return resp.accessToken;
+    }catch(e2){
+      throw new Error('Connexion à OneDrive impossible — déconnectez-vous puis reconnectez-vous (icône ☁️).');
+    }
   }
 }
 
@@ -8895,6 +8920,8 @@ async function saveToOneDrive(){
   // reloadFromOneDrive() pour son propre affichage pendant qu'il délègue ici tout le travail —
   // sans ça, cette fonction se bloquait elle-même silencieusement dès qu'appelée depuis là.
   if(oneDriveStatus !== 'connected' && oneDriveStatus !== 'connecting') return;
+  oneDriveError = ''; // on repart propre à chaque tentative — sinon une erreur passée resterait
+                       // affichée indéfiniment, même une fois la connexion redevenue normale
   try{
     // Avant de pousser, on récupère et fusionne la dernière version distante — c'est l'étape
     // qui manquait auparavant : sans elle, deux appareils actifs en même temps s'écrasaient l'un
@@ -8920,7 +8947,8 @@ async function saveToOneDrive(){
   }catch(e){
     console.error('Sauvegarde OneDrive échouée', e);
     oneDriveError = e.message || String(e);
-    render(); // utile de signaler l'échec — mais reste rare, contrairement à un succès
+    toast('⚠️ Échec de l\'enregistrement — ' + oneDriveError, 3500); // visible même sur mobile, où l'infobulle ne s'affiche jamais
+    render();
   }
 }
 
@@ -8949,11 +8977,15 @@ function saveNow(){
     if(current){
       current.classList.remove('saving');
       current.disabled = false;
-      current.classList.add('just-saved');
-      setTimeout(() => {
-        const c2 = document.querySelector('.brand-save-btn');
-        if(c2) c2.classList.remove('just-saved');
-      }, 1300);
+      if(!oneDriveError){
+        // Confirmation verte réservée aux vrais succès — un échec est déjà signalé par le
+        // message affiché séparément, pas besoin d'un signal contradictoire ("vert" = ok).
+        current.classList.add('just-saved');
+        setTimeout(() => {
+          const c2 = document.querySelector('.brand-save-btn');
+          if(c2) c2.classList.remove('just-saved');
+        }, 1300);
+      }
     }
   });
 }
