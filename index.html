@@ -392,6 +392,18 @@
     text-transform:uppercase;letter-spacing:.03em;
   }
   .note-text{font-size:13px;line-height:1.5;color:var(--ink-700);white-space:pre-wrap;}
+  .note-edit-box textarea{width:100%;min-height:70px;font-size:13px;font-family:inherit;}
+  .import-menu-wrap{position:relative;}
+  .import-menu{
+    position:absolute;top:calc(100% + 4px);left:0;z-index:50;min-width:210px;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    box-shadow:0 8px 24px rgba(0,0,0,.15);padding:6px;display:flex;flex-direction:column;gap:2px;
+  }
+  .import-menu button{
+    text-align:left;background:none;border:none;padding:9px 10px;border-radius:6px;font-size:13px;
+    color:var(--ink-900);white-space:nowrap;
+  }
+  .import-menu button:hover{background:var(--panel-2);}
   .note-filters{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;}
   .note-filters button{
     font-size:10.5px;padding:3px 9px;border-radius:20px;border:1px solid var(--line);background:var(--panel);color:var(--ink-500);font-weight:600;
@@ -5915,6 +5927,20 @@ function addNote(cid){
   render();
   return true;
 }
+let editingNoteId = null;
+function toggleEditNote(noteId){
+  editingNoteId = noteId;
+  render();
+}
+function saveEditedNote(noteId){
+  const el = document.getElementById('note-edit-'+noteId);
+  if(!el) return;
+  const note = byId(DB.notes, noteId);
+  if(note) note.texte = el.value.trim();
+  editingNoteId = null;
+  toast('Note modifiée.');
+  render();
+}
 function deleteNote(noteId){
   const idx = DB.notes.findIndex(n=>n.id===noteId);
   if(idx<0) return;
@@ -6041,6 +6067,12 @@ function toggleStatutClient(cid){
 
 /* Création / suppression d'entreprise */
 let addingCompanyOpen = false;
+let importMenuOpen = false;
+function toggleImportMenu(e){
+  if(e) e.stopPropagation();
+  importMenuOpen = !importMenuOpen;
+  render();
+}
 let newCompanyForm = {nom:'', secteur:'', activite:'', rue:'', codePostal:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctMobile:'', ctEmail:'', ctRole:'autre'};
 function resetNewCompanyForm(){
   newCompanyForm = {nom:'', secteur:'', activite:'', rue:'', codePostal:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctMobile:'', ctEmail:'', ctRole:'autre'};
@@ -7002,9 +7034,18 @@ function renderNotes(co, notes){
         <div class="note-meta">
           ${fmtDate(n.date)}
           ${n.type && n.type!=='note' ? `<span class="note-type-badge" style="background:${NOTE_TYPE_COLORS[n.type]}">${NOTE_TYPE_LABELS[n.type]}</span>` : ''}
+          ${editingNoteId!==n.id ? `<button class="note-delete-btn" onclick="toggleEditNote('${n.id}')" title="Modifier cette note">✎</button>` : ''}
           <button class="note-delete-btn" onclick="deleteNote('${n.id}')" title="Supprimer cette note">🗑</button>
         </div>
-        ${n.texte ? `<div class="note-text">${esc(n.texte)}</div>` : ''}
+        ${editingNoteId===n.id ? `
+        <div class="note-edit-box">
+          <textarea id="note-edit-${n.id}" data-focus-key="note-edit-${n.id}">${esc(n.texte)}</textarea>
+          <div class="inline-form-actions" style="padding:6px 0 0;">
+            <button class="btn small" onclick="toggleEditNote(null)">Annuler</button>
+            <button class="btn small primary" onclick="saveEditedNote('${n.id}')">Enregistrer</button>
+          </div>
+        </div>
+        ` : (n.texte ? `<div class="note-text">${esc(n.texte)}</div>` : '')}
         ${n.photos && n.photos.length ? `
           <div class="note-photos">
             ${n.photos.map(p=>`
@@ -7140,10 +7181,16 @@ function renderEntreprisesPage(){
         <div class="co-name" style="font-size:19px;">Entreprises</div>
         <div style="font-size:12.5px;color:var(--ink-500);">${list.length} sur ${DB.companies.length} — triez une colonne en cliquant sur son en-tête</div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn" onclick="triggerImportOneNote()" ${state.ocrStatus==='onenote'?'disabled':''}>${state.ocrStatus==='onenote'?'⏳ Lecture…':'📓 Importer OneNote'}</button>
-        <button class="btn" onclick="triggerImportContacts()">📱 Importer mes contacts</button>
-        <button class="btn" onclick="triggerImportBackup()">⬆️ Importer</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;position:relative;">
+        <div class="import-menu-wrap">
+          <button class="btn" onclick="toggleImportMenu(event)" ${state.ocrStatus==='onenote'?'disabled':''}>${state.ocrStatus==='onenote'?'⏳ Lecture…':'⬆️ Importer ▾'}</button>
+          ${importMenuOpen ? `
+          <div class="import-menu">
+            <button onclick="importMenuOpen=false;triggerImportOneNote()">📓 Notes OneNote</button>
+            <button onclick="importMenuOpen=false;triggerImportContacts()">📱 Mes contacts (.vcf)</button>
+            <button onclick="importMenuOpen=false;triggerImportBackup()">💾 Fichier de sauvegarde</button>
+          </div>` : ''}
+        </div>
         <button class="btn" onclick="triggerScanBusinessCard('new')" ${state.ocrStatus?'disabled':''}>${state.ocrStatus?'⏳ Lecture…':'📇 Scanner une carte'}</button>
         <button class="btn primary" onclick="toggleAddCompany()">${addingCompanyOpen?'Annuler':'+ Créer une entreprise'}</button>
       </div>
@@ -9416,6 +9463,15 @@ function setupEnterToSave(){
   document.addEventListener('keyup', handler);
 }
 
+function setupCloseMenusOnOutsideClick(){
+  document.addEventListener('click', (e) => {
+    if(importMenuOpen && !e.target.closest('.import-menu-wrap')){
+      importMenuOpen = false;
+      render();
+    }
+  });
+}
+
 /* Rechargement manuel — l'app ne vérifie une éventuelle mise à jour OneDrive faite depuis un
    autre appareil qu'une seule fois, à la connexion. Si l'app reste ouverte longtemps pendant
    qu'une modification est faite ailleurs (téléphone, autre ordinateur), elle ne le sait jamais
@@ -9554,6 +9610,7 @@ function startApp(){
   loadOcrLibrary().catch(()=>{});
   setupPullToRefresh();
   setupEnterToSave();
+  setupCloseMenusOnOutsideClick();
 }
 
 /* ---------------------------- TIRER POUR ACTUALISER ----------------------------
