@@ -594,6 +594,11 @@
   .legend-item{cursor:pointer;padding:2px 6px;border-radius:10px;border:1px solid transparent;}
   .legend-item:hover{background:var(--panel-2);}
   .legend-item.active{background:var(--brand-orange-wash);border-color:var(--brand-orange);font-weight:700;}
+  .non-geo-list{margin-top:6px;border-top:1px dashed var(--line);padding-top:6px;max-height:160px;overflow-y:auto;}
+  .non-geo-item{padding:5px 4px;border-radius:6px;cursor:pointer;font-size:12px;}
+  .non-geo-item:hover{background:var(--panel-2);}
+  .non-geo-item span:first-child{font-weight:700;display:block;}
+  .non-geo-item span:last-child{color:var(--ink-500);font-size:11px;}
   .map-sidebar{display:flex;flex-direction:column;gap:14px;}
   .filter-row{display:flex;gap:8px;min-width:0;}
   .filter-row select{flex:1;min-width:0;max-width:100%;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12.5px;background:#fff;}
@@ -5636,6 +5641,7 @@ let state = {
   mapQuery: '',
   mapView: null,        // {lonMin,lonMax,latMin,latMax} — null = pas encore initialisé
   mapHighlightId: null, // entreprise mise en évidence après "localiser"
+  showNonGeocoded: false, // affiche/masque la liste des entreprises non géolocalisées
   clusterViewIds: null, // ids des entreprises du dernier regroupement cliqué (affichées dans la liste)
   tourSelection: [],      // ids d'entreprises sélectionnées pour la tournée
   tourProposal: null,     // {order, legs, total} une fois l'itinéraire proposé
@@ -8165,6 +8171,12 @@ function clearClusterView(){
   render();
 }
 
+function clusterGroupRadius(g){
+  return g.length===1 ? (POTENTIEL_RADIUS[g[0].c.potentiel]||6) : Math.min(9+Math.sqrt(g.length)*3, 24);
+}
+function clusterGroupCenter(g){
+  return [g.reduce((s,p)=>s+p.x,0)/g.length, g.reduce((s,p)=>s+p.y,0)/g.length];
+}
 function clusterMarkers(list, view){
   const cellPx = 30;
   const buckets = {};
@@ -8173,7 +8185,32 @@ function clusterMarkers(list, view){
     const key = Math.floor(x/cellPx)+'_'+Math.floor(y/cellPx);
     (buckets[key] = buckets[key] || []).push({c,x,y});
   });
-  return Object.values(buckets);
+  let groups = Object.values(buckets);
+
+  // Un gros regroupement s'affiche avec un cercle bien plus large qu'une seule case de la
+  // grille — sans cette étape, ses voisins se chevauchent visuellement dès qu'une zone est
+  // dense (ex. tout le Drôme-Ardèche vu à l'échelle de la France entière), rendant les chiffres
+  // illisibles. On fusionne donc itérativement tout couple de regroupements dont les cercles se
+  // toucheraient à l'affichage, jusqu'à ce qu'il n'en reste plus aucun qui se chevauche.
+  let merged = true;
+  while(merged){
+    merged = false;
+    outer:
+    for(let i=0;i<groups.length;i++){
+      for(let j=i+1;j<groups.length;j++){
+        const [xi,yi] = clusterGroupCenter(groups[i]);
+        const [xj,yj] = clusterGroupCenter(groups[j]);
+        const dist = Math.hypot(xi-xj, yi-yj);
+        if(dist < (clusterGroupRadius(groups[i])+clusterGroupRadius(groups[j]))*0.85){
+          groups[i] = groups[i].concat(groups[j]);
+          groups.splice(j,1);
+          merged = true;
+          break outer;
+        }
+      }
+    }
+  }
+  return groups;
 }
 
 function renderMapView(){
@@ -8222,9 +8259,8 @@ function renderMapView(){
       </g>`;
     }
     // cluster of several companies close together on screen
-    const cx = group.reduce((s,g)=>s+g.x,0)/group.length;
-    const cy = group.reduce((s,g)=>s+g.y,0)/group.length;
-    const r = Math.min(9+Math.sqrt(group.length)*3, 24);
+    const [cx, cy] = clusterGroupCenter(group);
+    const r = clusterGroupRadius(group);
     const ids = group.map(g=>g.c.id);
     return `
       <g class="fr-cluster-group" onclick='zoomToCluster(${JSON.stringify(ids)})'>
@@ -8320,7 +8356,14 @@ function renderMapView(){
               }).join('')}
             </select>
           </div>
-          <div style="font-size:11.5px;color:var(--ink-500);margin-top:8px;">${filtered.length} entreprise(s) sur la carte${nonGeocoded>0?` · <span style="color:var(--amber);font-weight:600;">${nonGeocoded} non géolocalisée(s)</span>`:''}${(state.mapSecteurFilter!=='tous'||state.mapRegionFilter!=='tous'||state.mapDeptFilter!=='tous'||state.mapQuery)?` · <a href="#" onclick="state.mapSecteurFilter='tous';state.mapRegionFilter='tous';state.mapDeptFilter='tous';state.mapQuery='';render();return false;" style="color:var(--brand-orange-dark);">réinitialiser</a>`:''}</div>
+          <div style="font-size:11.5px;color:var(--ink-500);margin-top:8px;">${filtered.length} entreprise(s) sur la carte${nonGeocoded>0?` · <a href="#" onclick="state.showNonGeocoded=!state.showNonGeocoded;render();return false;" style="color:var(--amber);font-weight:600;">${nonGeocoded} non géolocalisée(s)${state.showNonGeocoded?' ▲':' ▼'}</a>`:''}${(state.mapSecteurFilter!=='tous'||state.mapRegionFilter!=='tous'||state.mapDeptFilter!=='tous'||state.mapQuery)?` · <a href="#" onclick="state.mapSecteurFilter='tous';state.mapRegionFilter='tous';state.mapDeptFilter='tous';state.mapQuery='';render();return false;" style="color:var(--brand-orange-dark);">réinitialiser</a>`:''}</div>
+          ${state.showNonGeocoded && nonGeocoded>0 ? `
+          <div class="non-geo-list">
+            ${allFiltered.filter(c=>c.lat==null||c.lon==null).map(c=>`
+              <div class="non-geo-item" onclick="selectCompany('${c.id}');state.activeNav='aujourdhui';render()">
+                <span>${esc(c.nom)}</span><span class="ent-region">${esc(c.ville||'ville inconnue')} — cliquer pour compléter l'adresse</span>
+              </div>`).join('')}
+          </div>` : ''}
         </div>
 
         <div class="card" style="max-height:340px;overflow:auto;">
