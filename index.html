@@ -9696,36 +9696,48 @@ function withTimeout(promise, ms, message){
     new Promise((_, reject) => setTimeout(() => reject(new Error(message || 'Délai dépassé')), ms)),
   ]);
 }
+let __tokenPromiseInFlight = null;
 async function getGraphToken(){
-  if(!msalInstance) throw new Error('OneDrive indisponible (bibliothèque non chargée).');
-  const account = msalInstance.getActiveAccount();
-  if(!account) throw new Error('Non connecté.');
-  try{
-    const resp = await withTimeout(
-      msalInstance.acquireTokenSilent({scopes: ONEDRIVE_SCOPES, account}),
-      10000, 'Délai dépassé lors de la connexion silencieuse.'
-    );
-    return resp.accessToken;
-  }catch(e){
-    // La fenêtre pop-up de connexion peut rester bloquée sans jamais revenir, en particulier
-    // dans une app installée sur l'écran d'accueil ("standalone") sur mobile — sans limite de
-    // temps ici, un clic sur "Enregistrer" pouvait alors sembler "ne rien faire" indéfiniment,
-    // sans aucun message d'erreur pour comprendre pourquoi.
+  // Filet de sécurité supplémentaire (en plus de la protection dans saveToOneDrive) : si une
+  // demande de jeton est déjà en cours, on la réutilise plutôt que d'en ouvrir une seconde par-
+  // dessus — sans ça, chaque appel concurrent pourrait rouvrir sa propre fenêtre de connexion.
+  if(__tokenPromiseInFlight) return __tokenPromiseInFlight;
+  __tokenPromiseInFlight = (async () => {
+    if(!msalInstance) throw new Error('OneDrive indisponible (bibliothèque non chargée).');
+    const account = msalInstance.getActiveAccount();
+    if(!account) throw new Error('Non connecté.');
     try{
       const resp = await withTimeout(
-        // Important : sans préciser "account" ET "loginHint" ici, la fenêtre de connexion peut
-        // afficher le compte Microsoft par défaut du navigateur (ex. le compte personnel) au
-        // lieu du compte professionnel réellement actif dans l'app.
-        // "prompt: select_account" est essentiel ici : sans lui, Microsoft peut détecter une
-        // session active sur un AUTRE compte dans le navigateur et continuer avec silencieusement,
-        // en ignorant complètement le compte/l'indice qu'on lui donne par ailleurs.
-        msalInstance.acquireTokenPopup({scopes: ONEDRIVE_SCOPES, account, loginHint: account.username, prompt: 'select_account'}),
-        15000, 'Délai dépassé lors de l\'ouverture de la fenêtre de connexion.'
+        msalInstance.acquireTokenSilent({scopes: ONEDRIVE_SCOPES, account}),
+        10000, 'Délai dépassé lors de la connexion silencieuse.'
       );
       return resp.accessToken;
-    }catch(e2){
-      throw new Error('Connexion à OneDrive impossible — déconnectez-vous puis reconnectez-vous (icône ☁️).');
+    }catch(e){
+      // La fenêtre pop-up de connexion peut rester bloquée sans jamais revenir, en particulier
+      // dans une app installée sur l'écran d'accueil ("standalone") sur mobile — sans limite de
+      // temps ici, un clic sur "Enregistrer" pouvait alors sembler "ne rien faire" indéfiniment,
+      // sans aucun message d'erreur pour comprendre pourquoi.
+      try{
+        const resp = await withTimeout(
+          // Important : sans préciser "account" ET "loginHint" ici, la fenêtre de connexion peut
+          // afficher le compte Microsoft par défaut du navigateur (ex. le compte personnel) au
+          // lieu du compte professionnel réellement actif dans l'app.
+          // "prompt: select_account" est essentiel ici : sans lui, Microsoft peut détecter une
+          // session active sur un AUTRE compte dans le navigateur et continuer avec silencieusement,
+          // en ignorant complètement le compte/l'indice qu'on lui donne par ailleurs.
+          msalInstance.acquireTokenPopup({scopes: ONEDRIVE_SCOPES, account, loginHint: account.username, prompt: 'select_account'}),
+          15000, 'Délai dépassé lors de l\'ouverture de la fenêtre de connexion.'
+        );
+        return resp.accessToken;
+      }catch(e2){
+        throw new Error('Connexion à OneDrive impossible — déconnectez-vous puis reconnectez-vous (icône ☁️).');
+      }
     }
+  })();
+  try{
+    return await __tokenPromiseInFlight;
+  }finally{
+    __tokenPromiseInFlight = null;
   }
 }
 
@@ -9773,11 +9785,20 @@ async function uploadToOneDrive(jsonString){
   }
 }
 
+let __saveInFlight = false;
+let __saveQueued = false;
 async function saveToOneDrive(){
   // "connecting" est accepté en plus de "connected" : c'est l'état transitoire utilisé par
   // reloadFromOneDrive() pour son propre affichage pendant qu'il délègue ici tout le travail —
   // sans ça, cette fonction se bloquait elle-même silencieusement dès qu'appelée depuis là.
   if(oneDriveStatus !== 'connected' && oneDriveStatus !== 'connecting') return;
+  // Important : si une sauvegarde est DÉJÀ en cours (ex. plusieurs modifications rapprochées
+  // déclenchent chacune leur propre appel), on ne relance surtout pas une seconde tentative par-
+  // dessus — sans cette protection, chaque tentative pouvait rouvrir sa propre fenêtre de
+  // connexion Microsoft, donnant l'impression d'une boucle sans fin qui ne débloque jamais.
+  // On note juste qu'un rattrapage sera nécessaire une fois la première terminée.
+  if(__saveInFlight){ __saveQueued = true; return; }
+  __saveInFlight = true;
   oneDriveError = ''; // on repart propre à chaque tentative — sinon une erreur passée resterait
                        // affichée indéfiniment, même une fois la connexion redevenue normale
   try{
@@ -9807,6 +9828,13 @@ async function saveToOneDrive(){
     oneDriveError = e.message || String(e);
     toast('⚠️ Échec de l\'enregistrement — ' + oneDriveError, 3500); // visible même sur mobile, où l'infobulle ne s'affiche jamais
     render();
+  }
+  __saveInFlight = false;
+  if(__saveQueued){
+    // Des changements ont eu lieu pendant cette sauvegarde — on en relance UNE SEULE de plus
+    // pour les rattraper, jamais une pile de tentatives qui s'accumulent.
+    __saveQueued = false;
+    saveToOneDrive();
   }
 }
 
