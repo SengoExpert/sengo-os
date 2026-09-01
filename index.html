@@ -8758,6 +8758,10 @@ async function reloadFromOneDrive(){
     toast('Le rechargement a échoué — réessayez.');
   }
   render();
+  // Ce qu'on vient de récupérer est déjà la version présente sur OneDrive — inutile de la
+  // repousser aussitôt (voir la même remarque dans checkForRemoteUpdates).
+  clearTimeout(__autoSaveTimer);
+  __autoSaveTimer = null;
 }
 
 async function connectOneDrive(){
@@ -8835,6 +8839,10 @@ async function initOneDrive(){
     oneDriveError = e.message || String(e);
   }finally{
     render();
+    // Ce qu'on vient de récupérer est déjà la version présente sur OneDrive — inutile de la
+    // repousser aussitôt (voir la même remarque dans checkForRemoteUpdates).
+    clearTimeout(__autoSaveTimer);
+    __autoSaveTimer = null;
   }
 }
 
@@ -8940,6 +8948,10 @@ async function checkForRemoteUpdates(){
         state.selectedCompanyId = computeStartingCompanyId();
       }
       render();
+      // Ce qu'on vient de récupérer est déjà la version présente sur OneDrive — inutile (et
+      // risqué, ça multiplie les occasions d'écrasement croisé) de la repousser aussitôt.
+      clearTimeout(__autoSaveTimer);
+      __autoSaveTimer = null;
       toast('🔄 Mis à jour depuis un autre appareil', 2200);
     }
   }catch(e){
