@@ -7123,12 +7123,14 @@ function renderEntreprisesPage(){
         <div class="co-name" style="font-size:19px;">Entreprises</div>
         <div style="font-size:12.5px;color:var(--ink-500);">${list.length} sur ${DB.companies.length} — triez une colonne en cliquant sur son en-tête</div>
       </div>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn" onclick="triggerImportContacts()">📱 Importer mes contacts</button>
         <button class="btn" onclick="triggerImportBackup()">⬆️ Importer</button>
         <button class="btn" onclick="triggerScanBusinessCard('new')" ${state.ocrStatus?'disabled':''}>${state.ocrStatus?'⏳ Lecture…':'📇 Scanner une carte'}</button>
         <button class="btn primary" onclick="toggleAddCompany()">${addingCompanyOpen?'Annuler':'+ Créer une entreprise'}</button>
       </div>
       <input type="file" id="import-backup-input" accept="application/json" style="display:none;" onchange="importDataBackup(this)">
+      <input type="file" id="import-contacts-input" accept=".vcf,.vcard,text/vcard" style="display:none;" onchange="importContactsVCF(this)">
     </div>
 
     ${renderInlineCompanyForm()}
@@ -8812,6 +8814,139 @@ function exportDataBackup(){
   URL.revokeObjectURL(url);
   toast('Sauvegarde téléchargée.');
 }
+
+/* ---------------------------- IMPORT DES CONTACTS DU TÉLÉPHONE (.vcf) ----------------------------
+   Le format vCard (.vcf) est le format standard d'export des contacts (iPhone, iCloud, Android…).
+   On ne garde QUE les contacts avec une entreprise renseignée (poste/société) — les contacts
+   personnels sans entreprise sont volontairement ignorés, pour ne pas noyer la base commerciale.
+   Une déduplication est appliquée sur ce lot (téléphone/email/nom), utile quand les contacts sont
+   synchronisés depuis plusieurs sources (iCloud, téléphone, autre sauvegarde) et se retrouvent en
+   double. */
+function decodeVCardValue(raw){
+  return raw.replace(/\\n/gi, ' ').replace(/\\,/g, ',').replace(/\\;/g, ';').trim();
+}
+function parseVCF(text){
+  const blocks = text.split(/BEGIN:VCARD/i).slice(1);
+  return blocks.map(block => {
+    const rawLines = block.split(/\r\n|\n|\r/);
+    // "Dépliage" des lignes vCard repliées (une ligne continue sur la suivante si elle commence par une espace/tabulation)
+    const lines = [];
+    rawLines.forEach(line => {
+      if(/^[ \t]/.test(line) && lines.length){
+        lines[lines.length-1] += line.slice(1);
+      } else if(line.trim()){
+        lines.push(line);
+      }
+    });
+    const card = {fn:'', org:'', title:'', tel:'', email:''};
+    lines.forEach(line => {
+      const idx = line.indexOf(':');
+      if(idx<0) return;
+      const key = line.slice(0, idx).split(';')[0].toUpperCase();
+      const val = line.slice(idx+1);
+      if(key==='FN' && !card.fn) card.fn = decodeVCardValue(val);
+      else if(key==='N' && !card.fn){
+        const parts = val.split(';');
+        card.fn = [parts[1], parts[0]].filter(Boolean).join(' ').trim();
+      }
+      else if(key==='ORG' && !card.org) card.org = decodeVCardValue(val).split(';')[0];
+      else if(key==='TITLE' && !card.title) card.title = decodeVCardValue(val);
+      else if(key==='TEL' && !card.tel) card.tel = val.trim();
+      else if(key==='EMAIL' && !card.email) card.email = val.trim().toLowerCase();
+    });
+    return card;
+  }).filter(c => c.fn || c.org);
+}
+function normKeyLoose(s){
+  return (s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]/g,'');
+}
+function normPhoneLoose(s){
+  const digits = (s||'').replace(/\D/g,'');
+  return digits.slice(-9); // les 9 derniers chiffres suffisent à identifier un même numéro, indicatif ou pas
+}
+function triggerImportContacts(){
+  const input = document.getElementById('import-contacts-input');
+  if(input) input.click();
+}
+function importContactsVCF(input){
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const allCards = parseVCF(e.target.result);
+      const proCards = allCards.filter(c => c.org); // on ignore les contacts sans entreprise renseignée
+
+      // Déduplication au sein de ce lot (téléphone + email + nom, pour repérer les doublons venant
+      // de plusieurs sources synchronisées) — on garde la fiche la plus complète en cas de doublon.
+      const seen = new Map();
+      let doublons = 0;
+      proCards.forEach(c => {
+        const keys = [normPhoneLoose(c.tel), c.email, normKeyLoose(c.fn)+normKeyLoose(c.org)].filter(Boolean);
+        const existingKey = keys.find(k => seen.has(k));
+        if(existingKey){
+          const existing = seen.get(existingKey);
+          const scoreNew = [c.tel,c.email,c.title,c.org].filter(Boolean).length;
+          const scoreOld = [existing.tel,existing.email,existing.title,existing.org].filter(Boolean).length;
+          if(scoreNew > scoreOld){
+            keys.forEach(k => seen.set(k, c));
+          }
+          doublons++;
+        } else {
+          keys.forEach(k => seen.set(k, c));
+        }
+      });
+      const uniqueCards = [...new Set(seen.values())];
+
+      // Table de correspondance vers les entreprises déjà connues, pour rattacher plutôt que dupliquer
+      const companyByKey = new Map();
+      DB.companies.forEach(co => companyByKey.set(normKeyLoose(co.nom), co));
+
+      let nouvellesEntreprises = 0, rattaches = 0;
+      uniqueCards.forEach(c => {
+        const key = normKeyLoose(c.org);
+        let co = companyByKey.get(key);
+        if(!co){
+          co = {
+            id: gen_id_client('newcont'), ref: 'CT-' + (DB.companies.length+1),
+            nom: c.org, activite: '', secteur: 'Industrie',
+            rue:'', codePostal:'', ville:'', adresse:'', region: null,
+            tel:'', site:'', partenaire:'SENGO Expert direct', prestataire:'SENGO EXPERT',
+            potentiel:'moyen', statutClient:'prospect', groupe:'',
+            effectif:null, ca:null, lat:null, lon:null,
+            resume:'Importée depuis vos contacts téléphone.', watch:[], strategie:'',
+          };
+          DB.companies.push(co);
+          companyByKey.set(key, co);
+          nouvellesEntreprises++;
+        } else {
+          rattaches++;
+        }
+        const [prenom, ...rest] = (c.fn||'').split(' ');
+        DB.contacts.push({
+          id: gen_id_client('newcontk'), companyId: co.id,
+          prenom: prenom||'', nom: rest.join(' '),
+          fonction: c.title||'', tel: c.tel||'', email: c.email||'',
+          role: 'autre', notes: '',
+        });
+      });
+
+      const ignoresPerso = allCards.length - proCards.length;
+      render();
+      toast(`${uniqueCards.length} contacts pro importés (${nouvellesEntreprises} nouvelles entreprises, ${rattaches} rattachés à l'existant, ${doublons} doublons ignorés, ${ignoresPerso} contacts personnels ignorés).`, 5000);
+      setTimeout(saveNow, 1800); // laisse le temps de lire le résumé avant que la confirmation d'enregistrement ne le remplace
+    }catch(err){
+      console.error('Import contacts échoué', err);
+      toast('Fichier .vcf invalide ou illisible.');
+    }
+  };
+  reader.readAsText(file);
+}
+function gen_id_client(prefix){
+  return prefix + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+}
+
 function triggerImportBackup(){
   const input = document.getElementById('import-backup-input');
   if(input) input.click();
@@ -9056,6 +9191,11 @@ async function connectOneDrive(){
     const loginResp = await msalInstance.loginPopup({ scopes: ONEDRIVE_SCOPES, prompt: 'select_account' });
     msalInstance.setActiveAccount(loginResp.account);
     oneDriveAccountEmail = loginResp.account?.username || '';
+    // On mémorise explicitement CE compte précis (au-delà de ce que gère MSAL lui-même) — sans
+    // ça, si plusieurs comptes Microsoft ont déjà été utilisés sur cet appareil (ex. personnel
+    // PUIS professionnel), un rechargement de page ne sait pas lequel des deux reprendre et peut
+    // se reconnecter au mauvais.
+    try{ localStorage.setItem('sengo_os_active_account', loginResp.account.homeAccountId); }catch(e){}
     const snap = await downloadFromOneDrive();
     if(snap){
       applySnapshot(snap);
@@ -9077,6 +9217,7 @@ async function connectOneDrive(){
 
 function disconnectOneDrive(){
   if(msalInstance) msalInstance.setActiveAccount(null);
+  try{ localStorage.removeItem('sengo_os_active_account'); }catch(e){}
   oneDriveStatus = 'disconnected';
   oneDriveAccountEmail = '';
   toast('Déconnecté de OneDrive (les données restent enregistrées en ligne).');
@@ -9103,8 +9244,14 @@ async function initOneDrive(){
     oneDriveStatus = 'disconnected';
     const accounts = msalInstance.getAllAccounts();
     if(accounts.length){
-      msalInstance.setActiveAccount(accounts[0]);
-      oneDriveAccountEmail = accounts[0]?.username || '';
+      // On retrouve le compte explicitement mémorisé lors de la dernière connexion volontaire,
+      // plutôt que de prendre "le premier" trouvé en mémoire (qui peut être le mauvais si
+      // plusieurs comptes ont déjà été utilisés ici — ex. personnel puis professionnel).
+      let rememberedId = null;
+      try{ rememberedId = localStorage.getItem('sengo_os_active_account'); }catch(e){}
+      const account = (rememberedId && accounts.find(a => a.homeAccountId === rememberedId)) || accounts[0];
+      msalInstance.setActiveAccount(account);
+      oneDriveAccountEmail = account?.username || '';
       oneDriveStatus = 'connecting';
       render();
       const snap = await downloadFromOneDrive();
