@@ -75,8 +75,11 @@
   .brand-save-btn{
     background:var(--brand-orange);color:#fff;border:none;border-radius:6px;
     padding:5px 11px;font-size:12px;font-weight:700;margin-left:6px;white-space:nowrap;
+    transition:background-color .15s, opacity .15s;
   }
   .brand-save-btn:hover{filter:brightness(1.08);}
+  .brand-save-btn.saving{opacity:.55;cursor:wait;}
+  .brand-save-btn.just-saved{background:var(--green);}
   .nav{display:flex;gap:2px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;}
   .nav::-webkit-scrollbar{display:none;}
   .nav button{
@@ -8937,7 +8940,22 @@ function scheduleAutoSave(){
 function saveNow(){
   clearTimeout(__autoSaveTimer);
   __autoSaveTimer = null;
-  saveToOneDrive();
+  const btn = document.querySelector('.brand-save-btn');
+  if(btn){ btn.classList.add('saving'); btn.disabled = true; }
+  saveToOneDrive().finally(() => {
+    // On recherche le bouton à nouveau plutôt que de garder l'ancienne référence : un rendu a pu
+    // le recréer entre-temps (ex. si la fusion a rapatrié une modification faite ailleurs).
+    const current = document.querySelector('.brand-save-btn');
+    if(current){
+      current.classList.remove('saving');
+      current.disabled = false;
+      current.classList.add('just-saved');
+      setTimeout(() => {
+        const c2 = document.querySelector('.brand-save-btn');
+        if(c2) c2.classList.remove('just-saved');
+      }, 1300);
+    }
+  });
 }
 
 /* Valider par Entrée : plutôt que de laisser tourner une vérification automatique en tâche de
