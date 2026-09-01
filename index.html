@@ -9954,6 +9954,10 @@ async function connectOneDrive(){
     toast('OneDrive indisponible pour le moment (bibliothèque non chargée — vérifiez votre connexion).');
     return;
   }
+  // Filet de sécurité supplémentaire : une éventuelle tentative de jeton restée en suspens
+  // depuis avant (autre compte, autre contexte) ne doit jamais interférer avec CETTE connexion
+  // explicite — sinon le compte qui aboutit peut ne pas être celui qu'on vient de choisir.
+  __tokenPromiseInFlight = null;
   oneDriveStatus = 'connecting';
   oneDriveError = '';
   render();
@@ -9988,6 +9992,15 @@ async function connectOneDrive(){
 function disconnectOneDrive(){
   if(msalInstance) msalInstance.setActiveAccount(null);
   try{ localStorage.removeItem('sengo_os_active_account'); }catch(e){}
+  // Important : on efface aussi tout ce qui aurait pu rester "en cours" depuis avant la
+  // déconnexion (une sauvegarde ou une demande de jeton pas encore terminée) — sinon cette
+  // opération résiduelle, encore liée à l'ancien compte, peut venir perturber la prochaine
+  // tentative de connexion et faire aboutir le mauvais compte malgré un choix explicite.
+  __tokenPromiseInFlight = null;
+  __saveInFlight = false;
+  __saveQueued = false;
+  clearTimeout(__autoSaveTimer);
+  __autoSaveTimer = null;
   oneDriveStatus = 'disconnected';
   oneDriveAccountEmail = '';
   toast('Déconnecté de OneDrive (les données restent enregistrées en ligne).');
