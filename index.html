@@ -8023,28 +8023,84 @@ function renderMailingModal(){
   </div>`;
 }
 
-function proposeTour(){
+/* ---------------------------- CALCUL D'ITINÉRAIRE ROUTIER RÉEL ----------------------------
+   Utilise OSRM (service de calcul d'itinéraire routier gratuit, sans clé à configurer) pour
+   obtenir de vraies distances et durées de trajet — essentiel en zone de relief (Ardèche...) où
+   la distance à vol d'oiseau peut être très trompeuse par rapport à la route réelle. En cas
+   d'indisponibilité du service (pas de réseau, service surchargé), on retombe sur l'ancienne
+   estimation à vol d'oiseau, en le signalant clairement pour ne jamais faire croire à une
+   précision qu'on n'a pas. */
+function formatDuration(totalMin){
+  const h = Math.floor(totalMin/60), m = Math.round(totalMin%60);
+  return h>0 ? `${h} h ${m.toString().padStart(2,'0')} min` : `${m} min`;
+}
+async function fetchRoadMatrix(companies){
+  const coords = companies.map(c => `${c.lon},${c.lat}`).join(';');
+  const url = `https://router.project-osrm.org/table/v1/driving/${coords}?annotations=distance,duration`;
+  const resp = await fetch(url);
+  if(!resp.ok) throw new Error('Service d\'itinéraire indisponible (' + resp.status + ')');
+  const data = await resp.json();
+  if(data.code !== 'Ok' || !data.durations || !data.distances) throw new Error('Réponse invalide du service d\'itinéraire.');
+  return {durations: data.durations, distances: data.distances}; // secondes, mètres — matrices NxN
+}
+let tourProposalLoading = false;
+async function proposeTour(){
   if(state.tourSelection.length < 2){ toast('Sélectionnez au moins 2 entreprises pour proposer un itinéraire.'); return; }
-  const companies = state.tourSelection.map(id => byId(DB.companies, id));
-  let order = [companies[0]];
-  let remaining = companies.slice(1);
-  while(remaining.length){
-    const last = order[order.length-1];
-    let bestIdx=0, bestD=Infinity;
-    remaining.forEach((c,i)=>{
-      const d = haversineKm(last.lat,last.lon,c.lat,c.lon);
-      if(d<bestD){ bestD=d; bestIdx=i; }
-    });
-    order.push(remaining[bestIdx]);
-    remaining.splice(bestIdx,1);
+  const companies = state.tourSelection.map(id => byId(DB.companies, id)).filter(c => c && c.lat!=null && c.lon!=null);
+  if(companies.length < 2){ toast('Au moins 2 entreprises géolocalisées sont nécessaires pour un itinéraire.'); return; }
+
+  tourProposalLoading = true;
+  render();
+
+  try{
+    const {durations, distances} = await fetchRoadMatrix(companies);
+    const n = companies.length;
+    const visited = new Array(n).fill(false);
+    const order = [0];
+    visited[0] = true;
+    // Plus proche voisin, mais sur la VRAIE durée de trajet routier — pas la distance à vol
+    // d'oiseau, qui aurait pu suggérer un ordre de visite absurde en zone de montagne.
+    for(let step=1; step<n; step++){
+      const last = order[order.length-1];
+      let best=-1, bestDur=Infinity;
+      for(let j=0;j<n;j++){
+        if(!visited[j] && durations[last][j]<bestDur){ bestDur=durations[last][j]; best=j; }
+      }
+      order.push(best);
+      visited[best] = true;
+    }
+    const legs=[]; let totalKm=0, totalMin=0;
+    for(let i=0;i<order.length-1;i++){
+      const a=order[i], b=order[i+1];
+      const km = distances[a][b]/1000, min = durations[a][b]/60;
+      legs.push({from:companies[a], to:companies[b], km, min});
+      totalKm += km; totalMin += min;
+    }
+    state.tourProposal = {order: order.map(i=>companies[i]), legs, total: totalKm, totalMin, isReal: true};
+  }catch(e){
+    console.error('Calcul d\'itinéraire routier échoué, repli sur une estimation à vol d\'oiseau', e);
+    let order = [companies[0]];
+    let remaining = companies.slice(1);
+    while(remaining.length){
+      const last = order[order.length-1];
+      let bestIdx=0, bestD=Infinity;
+      remaining.forEach((c,i)=>{
+        const d = haversineKm(last.lat,last.lon,c.lat,c.lon);
+        if(d<bestD){ bestD=d; bestIdx=i; }
+      });
+      order.push(remaining[bestIdx]);
+      remaining.splice(bestIdx,1);
+    }
+    const legs=[]; let total=0;
+    for(let i=0;i<order.length-1;i++){
+      const km = haversineKm(order[i].lat,order[i].lon,order[i+1].lat,order[i+1].lon);
+      legs.push({from:order[i], to:order[i+1], km});
+      total += km;
+    }
+    state.tourProposal = {order, legs, total, isReal: false};
+    toast('Service d\'itinéraire indisponible — estimation à vol d\'oiseau affichée (moins précise en zone de relief).', 4000);
   }
-  const legs=[]; let total=0;
-  for(let i=0;i<order.length-1;i++){
-    const km = haversineKm(order[i].lat,order[i].lon,order[i+1].lat,order[i+1].lon);
-    legs.push({from:order[i], to:order[i+1], km});
-    total += km;
-  }
-  state.tourProposal = {order, legs, total};
+  tourProposalLoading = false;
   render();
 }
 
@@ -8262,16 +8318,19 @@ function renderMapView(){
           <h2>Tournée commerciale <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">proposition</span></h2>
           <div style="font-size:12.5px;color:var(--ink-700);margin-bottom:8px;">${state.tourSelection.length} entreprise(s) sélectionnée(s)${state.tourSelection.length?' : '+state.tourSelection.map(id=>byId(DB.companies,id).nom).join(', '):''}</div>
           <div style="display:flex;gap:6px;">
-            <button class="btn primary small" ${state.tourSelection.length<2?'disabled style="opacity:.4;"':''} onclick="proposeTour()">Proposer un itinéraire</button>
+            <button class="btn primary small" ${state.tourSelection.length<2||tourProposalLoading?'disabled style="opacity:.4;"':''} onclick="proposeTour()">${tourProposalLoading?'⏳ Calcul…':'Proposer un itinéraire'}</button>
             ${state.tourSelection.length ? `<button class="btn small" onclick="clearTourSelection()">Vider la sélection</button>` : ''}
           </div>
 
-          ${state.tourProposal ? `
+          ${tourProposalLoading ? `<div style="margin-top:12px;font-size:12.5px;color:var(--ink-500);">⏳ Calcul de l'itinéraire routier en cours…</div>` : ''}
+          ${state.tourProposal && !tourProposalLoading ? `
             <div style="margin-top:12px;">
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-500);font-weight:600;margin-bottom:6px;">Ordre de visite suggéré</div>
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-500);font-weight:600;margin-bottom:6px;">
+                Ordre de visite suggéré ${state.tourProposal.isReal ? '<span style="color:var(--green);font-weight:700;">· itinéraire routier réel</span>' : '<span style="color:var(--amber);font-weight:700;">· estimation à vol d\'oiseau (service indisponible)</span>'}
+              </div>
               ${state.tourProposal.order.map((c,i)=>`<div class="tour-leg"><span>${i+1}. ${esc(c.nom)} <span style="color:var(--ink-500);">(${esc(c.ville)})</span></span></div>`).join('')}
-              ${state.tourProposal.legs.map(l=>`<div class="tour-leg" style="color:var(--ink-500);"><span>↳ ${esc(l.from.ville)} → ${esc(l.to.ville)}</span><span class="mono">${l.km.toFixed(0)} km</span></div>`).join('')}
-              <div class="tour-total"><span>Total (à vol d'oiseau)</span><span class="mono">${state.tourProposal.total.toFixed(0)} km · ~${(state.tourProposal.total/60).toFixed(1)} h de route</span></div>
+              ${state.tourProposal.legs.map(l=>`<div class="tour-leg" style="color:var(--ink-500);"><span>↳ ${esc(l.from.ville)} → ${esc(l.to.ville)}</span><span class="mono">${l.km.toFixed(0)} km${l.min!=null?' · '+Math.round(l.min)+' min':''}</span></div>`).join('')}
+              <div class="tour-total"><span>Total${state.tourProposal.isReal?' (route réelle)':' (à vol d\'oiseau)'}</span><span class="mono">${state.tourProposal.total.toFixed(0)} km · ${state.tourProposal.isReal ? formatDuration(state.tourProposal.totalMin) : '~'+(state.tourProposal.total/50).toFixed(1)+' h'} de route</span></div>
               <div class="field-row" style="margin-top:10px;">
                 <label>Date de la tournée</label>
                 <input type="date" value="${state.tourDate}" onchange="state.tourDate=this.value">
