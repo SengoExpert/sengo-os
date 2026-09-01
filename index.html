@@ -591,6 +591,9 @@
   .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;font-size:11px;color:var(--ink-700);}
   .legend span{display:inline-flex;align-items:center;gap:4px;}
   .legend .dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none;}
+  .legend-item{cursor:pointer;padding:2px 6px;border-radius:10px;border:1px solid transparent;}
+  .legend-item:hover{background:var(--panel-2);}
+  .legend-item.active{background:var(--brand-orange-wash);border-color:var(--brand-orange);font-weight:700;}
   .map-sidebar{display:flex;flex-direction:column;gap:14px;}
   .filter-row{display:flex;gap:8px;min-width:0;}
   .filter-row select{flex:1;min-width:0;max-width:100%;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12.5px;background:#fff;}
@@ -7932,6 +7935,11 @@ function renderNotesPage(){
 /* ======================================================================
    CARTE — entreprises géolocalisées, filtres secteur/région, tournée
    ====================================================================== */
+function toggleMapSecteurFilter(secteur){
+  state.mapSecteurFilter = state.mapSecteurFilter === secteur ? 'tous' : secteur;
+  state.clusterViewIds = null;
+  render();
+}
 function filteredMapCompaniesAll(){
   const q = state.mapQuery.trim().toLowerCase();
   return DB.companies.filter(c =>
@@ -7956,6 +7964,63 @@ function clearTourSelection(){
   state.tourSelection = [];
   state.tourProposal = null;
   render();
+}
+function selectFilteredForTour(){
+  const ids = filteredMapCompanies().map(c=>c.id); // uniquement les géolocalisées (nécessaire pour un itinéraire)
+  if(!ids.length){ toast('Aucune entreprise géolocalisée dans ces résultats.'); return; }
+  state.tourSelection = ids;
+  state.tourProposal = null;
+  toast(`${ids.length} entreprise(s) ajoutée(s) à la sélection pour la tournée.`);
+  render();
+}
+
+/* ---------------------------- MAILING SUR UNE SÉLECTION (secteur, filtres...) ---------------------------- */
+let mailingListOpen = false;
+let mailingEmails = [];
+function openMailingForFiltered(){
+  const companies = filteredMapCompaniesAll();
+  const companyIds = new Set(companies.map(c=>c.id));
+  const emails = [...new Set(
+    DB.contacts.filter(k => companyIds.has(k.companyId) && k.email).map(k=>k.email.trim().toLowerCase())
+  )];
+  if(!emails.length){ toast('Aucun email trouvé parmi les contacts de ces résultats.'); return; }
+  mailingEmails = emails;
+  mailingListOpen = true;
+  render();
+}
+function closeMailingList(){
+  mailingListOpen = false;
+  render();
+}
+function copyMailingEmails(){
+  const text = mailingEmails.join('; ');
+  navigator.clipboard.writeText(text).then(() => toast('Adresses copiées dans le presse-papiers.'));
+}
+function openMailingInMailClient(){
+  if(mailingEmails.length > 50){
+    toast(`Trop d'adresses (${mailingEmails.length}) pour ouvrir directement votre messagerie — utilisez plutôt "Copier les adresses" et collez-les en Cci dans votre outil habituel.`, 4500);
+    return;
+  }
+  openExternal('mailto:?bcc=' + encodeURIComponent(mailingEmails.join(',')));
+}
+function renderMailingModal(){
+  return `
+  <div class="modal-overlay" onclick="if(event.target===this) closeMailingList()">
+    <div class="modal" style="width:480px;">
+      <div class="modal-head" style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="font-size:16px;font-weight:700;">Mailing — ${mailingEmails.length} adresse(s)</h2>
+        <button class="btn ghost small" onclick="closeMailingList()">✕</button>
+      </div>
+      <div style="padding:16px 20px;max-height:300px;overflow-y:auto;font-size:12.5px;color:var(--ink-700);line-height:1.7;">
+        ${mailingEmails.map(e=>esc(e)).join('<br>')}
+      </div>
+      <div class="inline-form-actions" style="padding:14px 20px;border-top:1px solid var(--line);">
+        <button class="btn" onclick="closeMailingList()">Fermer</button>
+        <button class="btn" onclick="copyMailingEmails()">📋 Copier les adresses</button>
+        <button class="btn primary" onclick="openMailingInMailClient()">✉️ Ouvrir dans ma messagerie</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 function proposeTour(){
@@ -8103,7 +8168,7 @@ function renderMapView(){
 
   const legendSecteurs = Object.entries(SECTOR_COLORS)
     .filter(([s]) => secteurs.includes(s))
-    .map(([s,col])=>`<span><span class="dot" style="background:${col}"></span>${esc(s)}</span>`).join('');
+    .map(([s,col])=>`<span class="legend-item ${state.mapSecteurFilter===s?'active':''}" onclick="toggleMapSecteurFilter('${s}')" title="Cliquer pour filtrer sur ce secteur"><span class="dot" style="background:${col}"></span>${esc(s)}</span>`).join('');
 
   const sortedList = [...filtered].sort((a,b)=> (a.ville||'').localeCompare(b.ville||'') || a.nom.localeCompare(b.nom));
   const clusterCompanies = state.clusterViewIds ? state.clusterViewIds.map(id=>byId(DB.companies,id)).filter(Boolean) : null;
@@ -8119,6 +8184,8 @@ function renderMapView(){
           <button class="btn small" onclick="zoomMapStep(1/0.7)" title="Dézoomer">➖</button>
           <button class="btn small" onclick="fitMapToCompanies(filteredMapCompanies())">🎯 Cadrer sur les résultats</button>
           <button class="btn small" onclick="resetMapFrance()">🇫🇷 Vue France entière</button>
+          <button class="btn small" onclick="selectFilteredForTour()" title="Ajoute toutes les entreprises actuellement filtrées (secteur, région...) à la sélection tournée, en bas de page">🚚 Tournée sur ces résultats</button>
+          <button class="btn small" onclick="openMailingForFiltered()" title="Récupère les emails des contacts des entreprises actuellement filtrées">📧 Mailing sur ces résultats</button>
           <span style="margin-left:auto;font-size:11px;color:var(--ink-500);">pincer = zoom · glisser ou 2 doigts = déplacer</span>
         </div>
         <svg id="france-svg" viewBox="0 0 ${MAP_W+MAP_PAD*2} ${MAP_H+MAP_PAD*2}" style="width:100%;height:auto;display:block;cursor:grab;touch-action:none;"
@@ -8625,6 +8692,7 @@ function render(){
     ${mainHtml}
     ${renderModal()}
     ${oneNoteReviewOpen ? renderOneNoteReview() : ''}
+    ${mailingListOpen ? renderMailingModal() : ''}
   `;
 
   if(modalScrollTop != null){
