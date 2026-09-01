@@ -250,6 +250,8 @@
   .badge.potentiel-fort{background:var(--green-wash);color:var(--green);border-color:transparent;}
   .badge.potentiel-moyen{background:var(--amber-wash);color:var(--amber);border-color:transparent;}
   .badge.potentiel-faible{background:var(--panel-2);color:var(--ink-500);}
+  .badge.statut-client-client{background:#E8EFF4;color:var(--blue);border-color:transparent;font-weight:700;}
+  .badge.statut-client-prospect{background:var(--panel-2);color:var(--ink-500);border:1px dashed var(--line);}
   .co-actions{display:flex;gap:6px;flex-wrap:wrap;}
 
   /* Tâche en cours */
@@ -514,6 +516,7 @@
   .ent-table tbody tr:last-child{border-bottom:none;}
   .ent-table td{padding:10px 14px;vertical-align:middle;}
   .ent-name{font-weight:700;font-size:13.5px;}
+  .ent-client-dot{color:var(--blue);font-weight:700;}
   .ent-ref{font-size:10px;color:var(--ink-300);}
   .ent-region{font-size:11px;color:var(--ink-500);}
   .sector-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;}
@@ -5091,6 +5094,7 @@ function simplifySecteur(raw){
   return 'Industrie'; // secteurs divers non classables (holding, conseil, assurance, édition…)
 }
 DB.companies.forEach(c => { c.secteurDetail = c.secteur; c.secteur = simplifySecteur(c.secteur); });
+DB.companies.forEach(c => { if(!c.statutClient) c.statutClient = 'prospect'; }); // 'prospect' ou 'client'
 
 // Pré-datage à 0 de toutes les données de démonstration : sans ça, le tout premier affichage de
 // l'app (avant toute connexion OneDrive) leur donnerait un horodatage "maintenant", et elles
@@ -5602,7 +5606,7 @@ let state = {
   noteSort: {field:'date', dir:'desc'},
   // Entreprises (liste triable/filtrable)
   entSort: {field:'nom', dir:'asc'},
-  entFilters: {secteur:'tous', region:'tous', departement:'tous', taille:'tous', potentiel:'tous', groupe:'tous', q:''},
+  entFilters: {secteur:'tous', region:'tous', departement:'tous', taille:'tous', potentiel:'tous', groupe:'tous', statutClient:'tous', q:''},
   // Contacts (liste triable/filtrable)
   ctSort: {field:'nom', dir:'asc'},
   ctFilters: {role:'tous', q:''},
@@ -6003,6 +6007,12 @@ function updatePotentiel(cid, value){
   const co = byId(DB.companies, cid);
   co.potentiel = value;
   toast('Potentiel mis à jour : ' + value);
+  render();
+}
+function toggleStatutClient(cid){
+  const co = byId(DB.companies, cid);
+  co.statutClient = co.statutClient === 'client' ? 'prospect' : 'client';
+  toast(co.statutClient === 'client' ? '✓ Marqué comme client' : 'Marqué comme prospect');
   render();
 }
 
@@ -6454,6 +6464,7 @@ function renderCoHeader(co){
         <div class="co-id mono">${esc(co.ref)}</div>
         <div class="co-name">${esc(co.nom)}</div>
         <div class="co-badges">
+          <span class="badge statut-client-${co.statutClient}" onclick="toggleStatutClient('${co.id}')" title="Cliquer pour basculer entre client et prospect" style="cursor:pointer;">${co.statutClient==='client' ? '✓ Client' : '○ Prospect'}</span>
           <span class="badge ${potClass}">Potentiel ${co.potentiel}</span>
           <span class="badge">${esc(co.partenaire)}</span>
         </div>
@@ -6591,6 +6602,12 @@ function renderEntreprise(co){
     <div class="field-row"><label>Prestataire</label>
       <select onchange="updatePrestataire('${co.id}', this.value)">
         ${PRESTATAIRES.map(p=>`<option value="${p}" ${co.prestataire===p?'selected':''}>${p}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field-row"><label>Statut</label>
+      <select onchange="updateCompanyField('${co.id}','statutClient',this.value);render()">
+        <option value="prospect" ${co.statutClient!=='client'?'selected':''}>Prospect</option>
+        <option value="client" ${co.statutClient==='client'?'selected':''}>Client</option>
       </select>
     </div>
     <div class="field-row"><label>Potentiel</label>
@@ -7048,6 +7065,7 @@ function filteredSortedCompanies(){
     (f.taille==='tous' || tailleCategorie(c.effectif)===f.taille) &&
     (f.potentiel==='tous' || c.potentiel===f.potentiel) &&
     (f.groupe==='tous' || (c.groupe||'').trim().toLowerCase()===f.groupe) &&
+    (f.statutClient==='tous' || (c.statutClient||'prospect')===f.statutClient) &&
     (!f.q || c.nom.toLowerCase().includes(f.q.toLowerCase()))
   );
   const {field, dir} = state.entSort;
@@ -7066,7 +7084,7 @@ function filteredSortedCompanies(){
   return list;
 }
 function resetEntFilters(){
-  state.entFilters = {secteur:'tous', region:'tous', departement:'tous', taille:'tous', potentiel:'tous', groupe:'tous', q:''};
+  state.entFilters = {secteur:'tous', region:'tous', departement:'tous', taille:'tous', potentiel:'tous', groupe:'tous', statutClient:'tous', q:''};
   render();
 }
 
@@ -7128,6 +7146,11 @@ function renderEntreprisesPage(){
         <option value="moyen" ${f.potentiel==='moyen'?'selected':''}>Potentiel moyen</option>
         <option value="faible" ${f.potentiel==='faible'?'selected':''}>Potentiel faible</option>
       </select>
+      <select onchange="state.entFilters.statutClient=this.value;render()">
+        <option value="tous" ${f.statutClient==='tous'?'selected':''}>Clients + Prospects</option>
+        <option value="client" ${f.statutClient==='client'?'selected':''}>Clients uniquement</option>
+        <option value="prospect" ${f.statutClient==='prospect'?'selected':''}>Prospects uniquement</option>
+      </select>
       ${groupesOptions.length ? `
       <select onchange="state.entFilters.groupe=this.value;render()">
         <option value="tous" ${f.groupe==='tous'?'selected':''}>Tous groupes</option>
@@ -7155,7 +7178,7 @@ function renderEntreprisesPage(){
           ${list.map(c=>`
             <tr onclick="viewCompanyInline('${c.id}')">
               <td>
-                <div class="ent-name">${esc(c.nom)}</div>
+                <div class="ent-name">${c.statutClient==='client' ? '<span class="ent-client-dot" title="Client">✓</span> ' : ''}${esc(c.nom)}</div>
                 <div class="ent-ref mono">${esc(c.ref)}</div>
               </td>
               <td><span class="sector-dot" style="background:${SECTOR_COLORS[c.secteur]||'#999'}"></span>${esc(c.secteur)}</td>
