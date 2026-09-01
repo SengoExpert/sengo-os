@@ -487,9 +487,10 @@
   /* Modal terminer action */
   /* Modal terminer action */
   .modal-overlay{
-    position:absolute;top:0;left:0;right:0;min-height:100%;
+    position:fixed;top:0;left:0;right:0;bottom:0;
     background:rgba(20,24,27,.5);
-    z-index:100;padding:20px 0;
+    z-index:100;padding:20px 0;overflow-y:auto;
+    display:flex;align-items:flex-start;justify-content:center;
   }
   .modal{
     background:var(--panel);border-radius:14px;width:560px;max-width:calc(100% - 40px);margin:0 auto;
@@ -5771,7 +5772,6 @@ function emailPrimaryContact(cid){
 }
 
 function openFinish(taskId){
-  window.scrollTo(0, 0);
   state.finishingTaskId = taskId;
   state.showFinishModal = true;
   state.pendingEcheance = addDays(7);
@@ -5783,7 +5783,6 @@ function closeFinish(){
   render();
 }
 function openEditTask(taskId){
-  window.scrollTo(0, 0);
   state.editingTaskId = taskId;
   render();
 }
@@ -5813,7 +5812,17 @@ function saveEditTask(){
   render();
 }
 function deleteTaskFromEdit(){
-  const idx = DB.tasks.findIndex(t=>t.id===state.editingTaskId);
+  const t = byId(DB.tasks, state.editingTaskId);
+  if(!t) return;
+  state.pendingConfirm = {
+    message: `Supprimer la tâche « ${t.titre} » ?`,
+    onConfirmFn: 'performDeleteTaskFromEdit',
+    payload: t.id,
+  };
+  render();
+}
+function performDeleteTaskFromEdit(taskId){
+  const idx = DB.tasks.findIndex(t=>t.id===taskId);
   if(idx>=0){ recordDeletion('task', DB.tasks[idx].id); DB.tasks.splice(idx,1); }
   state.editingTaskId = null;
   toast('Tâche supprimée.');
@@ -5890,7 +5899,6 @@ function removePendingPhoto(id){
   render();
 }
 function openPhotoLightbox(photoId){
-  window.scrollTo(0, 0);
   state.lightboxPhotoId = photoId;
   render();
 }
@@ -5956,6 +5964,16 @@ function saveEditedNote(noteId){
   render();
 }
 function deleteNote(noteId){
+  const note = byId(DB.notes, noteId);
+  if(!note) return;
+  state.pendingConfirm = {
+    message: 'Supprimer cette note ?' + (note.photos && note.photos.length ? ` (et ses ${note.photos.length} photo(s))` : ''),
+    onConfirmFn: 'performDeleteNote',
+    payload: noteId,
+  };
+  render();
+}
+function performDeleteNote(noteId){
   const idx = DB.notes.findIndex(n=>n.id===noteId);
   if(idx<0) return;
   recordDeletion('note', noteId);
@@ -6310,7 +6328,7 @@ function askMergeCompanies(targetId){
   state.pendingConfirm = {
     message: `Fusionner « ${source.nom} » dans « ${target.nom} » ? ${nbContacts} contact(s), ${nbTasks} tâche(s), ${nbNotes} note(s), ${nbOpps} opportunité(s) et ${nbDocs} document(s) seront transférés, puis « ${source.nom} » sera définitivement supprimée. Cette action ne peut pas être annulée.`,
     onConfirmFn: 'performMergeCompanies',
-    payload: {sourceId, targetId},
+    payload: {__args: [sourceId, targetId]},
   };
   render();
 }
@@ -6406,6 +6424,16 @@ function moveContactToCompany(kid){
   setTimeout(saveNow, 200);
 }
 function deleteContact(kid){
+  const k = byId(DB.contacts, kid);
+  if(!k) return;
+  state.pendingConfirm = {
+    message: `Supprimer le contact ${k.prenom} ${k.nom} ?`,
+    onConfirmFn: 'performDeleteContact',
+    payload: kid,
+  };
+  render();
+}
+function performDeleteContact(kid){
   const idx = DB.contacts.findIndex(k=>k.id===kid);
   if(idx>=0){ recordDeletion('contact', kid); DB.contacts.splice(idx,1); }
   editingContactId = null;
@@ -7062,6 +7090,16 @@ function submitOpp(cid, oid){
   render();
 }
 function deleteOpp(oid){
+  const o = byId(DB.opportunities, oid);
+  if(!o) return;
+  state.pendingConfirm = {
+    message: `Supprimer l'opportunité « ${o.intitule} » ?`,
+    onConfirmFn: 'performDeleteOpp',
+    payload: oid,
+  };
+  render();
+}
+function performDeleteOpp(oid){
   const idx = DB.opportunities.findIndex(o=>o.id===oid);
   if(idx>=0){ recordDeletion('opportunity', oid); DB.opportunities.splice(idx,1); }
   editingOppId = null;
@@ -7154,6 +7192,16 @@ function submitDoc(cid, docId){
   render();
 }
 function deleteDoc(docId){
+  const d = byId(DB.documents, docId);
+  if(!d) return;
+  state.pendingConfirm = {
+    message: `Supprimer le document ${d.numero || ''} ?`,
+    onConfirmFn: 'performDeleteDoc',
+    payload: docId,
+  };
+  render();
+}
+function performDeleteDoc(docId){
   const idx = DB.documents.findIndex(d=>d.id===docId);
   if(idx>=0){ recordDeletion('document', docId); DB.documents.splice(idx,1); }
   editingDocId = null;
@@ -8177,7 +8225,6 @@ function renderMapView(){
 function deleteTournee(tid){
   const tour = byId(DB.tournees, tid);
   if(!tour) return;
-  window.scrollTo(0, 0);
   state.pendingConfirm = {
     message: `Supprimer cette tournée (${tour.companyIds.length} étapes du ${fmtDate(tour.date)}) ? Les tâches associées seront aussi retirées de la file de travail.`,
     onConfirmFn: 'performDeleteTournee',
@@ -8206,9 +8253,14 @@ function confirmYes(){
   const pc = state.pendingConfirm;
   if(!pc) return;
   state.pendingConfirm = null;
-  if(pc.onConfirmFn === 'performDeleteTournee') performDeleteTournee(pc.payload);
-  if(pc.onConfirmFn === 'performDeleteCompany') performDeleteCompany(pc.payload);
-  if(pc.onConfirmFn === 'performMergeCompanies') performMergeCompanies(pc.payload.sourceId, pc.payload.targetId);
+  const fn = window[pc.onConfirmFn];
+  if(typeof fn === 'function'){
+    if(pc.payload && typeof pc.payload === 'object' && !Array.isArray(pc.payload) && pc.payload.__args){
+      fn(...pc.payload.__args);
+    } else {
+      fn(pc.payload);
+    }
+  }
   render();
 }
 
