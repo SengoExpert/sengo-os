@@ -5640,6 +5640,7 @@ let state = {
   tourSelection: [],      // ids d'entreprises sélectionnées pour la tournée
   tourProposal: null,     // {order, legs, total} une fois l'itinéraire proposé
   tourDate: addDays(1),
+  tourStartId: '',        // '' = automatique (premier de la sélection) ; sinon id d'entreprise, ou "__last__" pour repartir d'où s'est arrêtée la dernière tournée
   // Terrain
   activeTourneeId: null,
   pendingConfirm: null, // {message, onConfirmFn, payload} — confirmation interne (pas de confirm() natif)
@@ -5665,6 +5666,7 @@ let state = {
 function setNav(n){
   state.activeNav = n;
   if(n === 'entreprises') state.entreprisesDetailCid = null; // revient à la liste, pas à un détail resté ouvert
+  if(n === 'carte') state.mapView = {...DEFAULT_VIEW}; // repart toujours d'une vue normale, pas du zoom laissé la dernière fois
   render();
 }
 function viewCompanyInline(cid){
@@ -7958,11 +7960,13 @@ function toggleTourSelection(cid){
   const i = state.tourSelection.indexOf(cid);
   if(i>=0) state.tourSelection.splice(i,1); else state.tourSelection.push(cid);
   state.tourProposal = null;
+  if(state.tourStartId === cid && i>=0) state.tourStartId = ''; // l'entreprise choisie comme départ vient d'être retirée
   render();
 }
 function clearTourSelection(){
   state.tourSelection = [];
   state.tourProposal = null;
+  state.tourStartId = '';
   render();
 }
 function selectFilteredForTour(){
@@ -8044,17 +8048,37 @@ async function fetchRoadMatrix(companies){
   return {durations: data.durations, distances: data.distances}; // secondes, mètres — matrices NxN
 }
 let tourProposalLoading = false;
+function findLastTourEndpoint(){
+  const withDate = DB.tournees.filter(t => t.companyIds && t.companyIds.length);
+  if(!withDate.length) return null;
+  const last = [...withDate].sort((a,b)=>(a.date||'').localeCompare(b.date||'')).pop();
+  const co = byId(DB.companies, last.companyIds[last.companyIds.length-1]);
+  return (co && co.lat!=null && co.lon!=null) ? co : null;
+}
 async function proposeTour(){
   if(state.tourSelection.length < 2){ toast('Sélectionnez au moins 2 entreprises pour proposer un itinéraire.'); return; }
-  const companies = state.tourSelection.map(id => byId(DB.companies, id)).filter(c => c && c.lat!=null && c.lon!=null);
+  let companies = state.tourSelection.map(id => byId(DB.companies, id)).filter(c => c && c.lat!=null && c.lon!=null);
   if(companies.length < 2){ toast('Au moins 2 entreprises géolocalisées sont nécessaires pour un itinéraire.'); return; }
+
+  // Point de départ : soit une entreprise précise de la sélection (forcée en première étape),
+  // soit un simple REPÈRE (là où s'est arrêtée la dernière tournée) qui sert uniquement à
+  // calculer le meilleur premier trajet, sans devenir lui-même une étape de CETTE tournée.
+  let virtualStart = null;
+  if(state.tourStartId === '__last__'){
+    virtualStart = findLastTourEndpoint();
+    if(!virtualStart) toast('Aucune tournée précédente géolocalisée trouvée — départ automatique utilisé.', 3000);
+  } else if(state.tourStartId){
+    const idx = companies.findIndex(c=>c.id===state.tourStartId);
+    if(idx>0){ const [chosen] = companies.splice(idx,1); companies.unshift(chosen); }
+  }
 
   tourProposalLoading = true;
   render();
 
   try{
-    const {durations, distances} = await fetchRoadMatrix(companies);
-    const n = companies.length;
+    const routeNodes = virtualStart ? [virtualStart, ...companies] : companies;
+    const {durations, distances} = await fetchRoadMatrix(routeNodes);
+    const n = routeNodes.length;
     const visited = new Array(n).fill(false);
     const order = [0];
     visited[0] = true;
@@ -8073,10 +8097,12 @@ async function proposeTour(){
     for(let i=0;i<order.length-1;i++){
       const a=order[i], b=order[i+1];
       const km = distances[a][b]/1000, min = durations[a][b]/60;
-      legs.push({from:companies[a], to:companies[b], km, min});
+      legs.push({from:routeNodes[a], to:routeNodes[b], km, min});
       totalKm += km; totalMin += min;
     }
-    state.tourProposal = {order: order.map(i=>companies[i]), legs, total: totalKm, totalMin, isReal: true};
+    let finalOrder = order.map(i=>routeNodes[i]);
+    if(virtualStart) finalOrder = finalOrder.filter(c => c.id !== virtualStart.id); // le repère n'est pas une étape
+    state.tourProposal = {order: finalOrder, legs, total: totalKm, totalMin, isReal: true, virtualStart};
   }catch(e){
     console.error('Calcul d\'itinéraire routier échoué, repli sur une estimation à vol d\'oiseau', e);
     let order = [companies[0]];
@@ -8222,6 +8248,7 @@ function renderMapView(){
       </g>`;
   }
 
+  const lastTourEndpointForUI = findLastTourEndpoint();
   const legendSecteurs = Object.entries(SECTOR_COLORS)
     .filter(([s]) => secteurs.includes(s))
     .map(([s,col])=>`<span class="legend-item ${state.mapSecteurFilter===s?'active':''}" onclick="toggleMapSecteurFilter('${s}')" title="Cliquer pour filtrer sur ce secteur"><span class="dot" style="background:${col}"></span>${esc(s)}</span>`).join('');
@@ -8317,6 +8344,15 @@ function renderMapView(){
         <div class="card">
           <h2>Tournée commerciale <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;">proposition</span></h2>
           <div style="font-size:12.5px;color:var(--ink-700);margin-bottom:8px;">${state.tourSelection.length} entreprise(s) sélectionnée(s)${state.tourSelection.length?' : '+state.tourSelection.map(id=>byId(DB.companies,id).nom).join(', '):''}</div>
+          ${state.tourSelection.length>=2 ? `
+          <div class="field-row" style="margin-bottom:6px;">
+            <label>Point de départ</label>
+            <select onchange="state.tourStartId=this.value;state.tourProposal=null;render()">
+              <option value="">Automatique (premier de la sélection)</option>
+              ${lastTourEndpointForUI ? `<option value="__last__" ${state.tourStartId==='__last__'?'selected':''}>↳ Continuer depuis la fin de la dernière tournée (${esc(lastTourEndpointForUI.nom)}, ${esc(lastTourEndpointForUI.ville)})</option>` : ''}
+              ${state.tourSelection.map(id => { const c=byId(DB.companies,id); return c ? `<option value="${id}" ${state.tourStartId===id?'selected':''}>${esc(c.nom)} (${esc(c.ville)})</option>` : ''; }).join('')}
+            </select>
+          </div>` : ''}
           <div style="display:flex;gap:6px;">
             <button class="btn primary small" ${state.tourSelection.length<2||tourProposalLoading?'disabled style="opacity:.4;"':''} onclick="proposeTour()">${tourProposalLoading?'⏳ Calcul…':'Proposer un itinéraire'}</button>
             ${state.tourSelection.length ? `<button class="btn small" onclick="clearTourSelection()">Vider la sélection</button>` : ''}
