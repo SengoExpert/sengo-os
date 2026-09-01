@@ -9969,7 +9969,10 @@ async function connectOneDrive(){
     // ça, si plusieurs comptes Microsoft ont déjà été utilisés sur cet appareil (ex. personnel
     // PUIS professionnel), un rechargement de page ne sait pas lequel des deux reprendre et peut
     // se reconnecter au mauvais.
-    try{ localStorage.setItem('sengo_os_active_account', loginResp.account.homeAccountId); }catch(e){}
+    try{
+      localStorage.setItem('sengo_os_active_account', loginResp.account.homeAccountId);
+      localStorage.removeItem('sengo_os_explicitly_disconnected'); // une connexion volontaire vient de réussir : le comportement automatique habituel peut reprendre au prochain chargement
+    }catch(e){}
     const snap = await downloadFromOneDrive();
     if(snap){
       applySnapshot(snap);
@@ -9991,7 +9994,10 @@ async function connectOneDrive(){
 
 function disconnectOneDrive(){
   if(msalInstance) msalInstance.setActiveAccount(null);
-  try{ localStorage.removeItem('sengo_os_active_account'); }catch(e){}
+  try{
+    localStorage.removeItem('sengo_os_active_account');
+    localStorage.setItem('sengo_os_explicitly_disconnected', '1');
+  }catch(e){}
   // Important : on efface aussi tout ce qui aurait pu rester "en cours" depuis avant la
   // déconnexion (une sauvegarde ou une demande de jeton pas encore terminée) — sinon cette
   // opération résiduelle, encore liée à l'ancien compte, peut venir perturber la prochaine
@@ -10026,7 +10032,13 @@ async function initOneDrive(){
     await msalInstance.initialize();
     oneDriveStatus = 'disconnected';
     const accounts = msalInstance.getAllAccounts();
-    if(accounts.length){
+    let explicitlyDisconnected = false;
+    try{ explicitlyDisconnected = localStorage.getItem('sengo_os_explicitly_disconnected') === '1'; }catch(e){}
+    // Si l'utilisateur s'est déconnecté volontairement lors de la session précédente, on ne
+    // devine surtout pas un compte au rechargement (MSAL garde plusieurs comptes en mémoire —
+    // personnel, professionnel... — et "le premier trouvé" peut très bien être le mauvais). On
+    // attend alors un clic volontaire sur ☁️, qui repasse par le vrai sélecteur de compte.
+    if(accounts.length && !explicitlyDisconnected){
       // On retrouve le compte explicitement mémorisé lors de la dernière connexion volontaire,
       // plutôt que de prendre "le premier" trouvé en mémoire (qui peut être le mauvais si
       // plusieurs comptes ont déjà été utilisés ici — ex. personnel puis professionnel).
