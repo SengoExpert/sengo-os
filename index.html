@@ -5253,7 +5253,18 @@ const DEPT_POLYGONS = [
 {code:'90',nom:'Territoire de Belfort',lon:6.926,lat:47.634,rings:[[[6.824,47.813],[7.016,47.743],[7.048,47.682],[7.006,47.602],[7.086,47.593],[7.138,47.511],[6.983,47.493],[6.999,47.452],[6.941,47.433],[6.908,47.495],[6.949,47.486],[6.946,47.512],[6.817,47.548],[6.758,47.748],[6.824,47.813]]]}
 ];
 const MAP_W = 560, MAP_H = 560, MAP_PAD = 14;
-const DEFAULT_VIEW = {lonMin:-4.8, lonMax:8.3, latMin:41.2, latMax:51.3};
+// Le cadrage brut ci-dessous (issu d'une estimation à la main) n'a pas exactement le bon
+// ratio largeur/hauteur pour un cadre carré (560x560) — sans correction, la carte apparaît
+// légèrement déformée tant qu'aucune autre vue (recalculée, elle, avec le bon ratio) ne vient
+// la remplacer. On applique donc ici la même correction que partout ailleurs dans le code.
+const DEFAULT_VIEW = (function(){
+  const raw = {lonMin:-4.8, lonMax:8.3, latMin:41.2, latMax:51.3};
+  const cLon = (raw.lonMin+raw.lonMax)/2, cLat = (raw.latMin+raw.latMax)/2;
+  let spanLon = raw.lonMax-raw.lonMin, spanLat = raw.latMax-raw.latMin;
+  const aspect = MAP_W/MAP_H;
+  if(spanLon/spanLat < aspect) spanLon = spanLat*aspect; else spanLat = spanLon/aspect;
+  return {lonMin:cLon-spanLon/2, lonMax:cLon+spanLon/2, latMin:cLat-spanLat/2, latMax:cLat+spanLat/2};
+})();
 const MIN_SPAN = 0.06, MAX_SPAN_LON = 13.1, MAX_SPAN_LAT = 10.1;
 function currentView(){ return state.mapView || DEFAULT_VIEW; }
 function projectPt(lon, lat, view){
