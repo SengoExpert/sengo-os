@@ -8752,6 +8752,11 @@ function mergeSnapshot(snap){
   DB.tournees = mergeById(DB.tournees, snap.tournees, tombstones);
   DB.tombstones = tombstones;
   DB.companies.forEach(c => { c._deptCache = undefined; });
+  // Important : sans ceci, le prochain rendu comparerait les fiches fusionnées à leur état
+  // D'AVANT la fusion, verrait une différence sur les champs récupérés de l'autre appareil, et
+  // les re-marquerait à tort comme "modifiés maintenant" — écrasant l'horodatage pourtant déjà
+  // correctement calculé par la fusion elle-même (le vrai moment de la modification d'origine).
+  __lastRenderSnapshot = {};
 }
 
 /* Export / import manuel — utile pour migrer les données d'un compte OneDrive à un
@@ -8851,12 +8856,32 @@ async function uploadToOneDrive(jsonString){
 }
 
 async function saveToOneDrive(){
-  if(oneDriveStatus !== 'connected') return;
+  // "connecting" est accepté en plus de "connected" : c'est l'état transitoire utilisé par
+  // reloadFromOneDrive() pour son propre affichage pendant qu'il délègue ici tout le travail —
+  // sans ça, cette fonction se bloquait elle-même silencieusement dès qu'appelée depuis là.
+  if(oneDriveStatus !== 'connected' && oneDriveStatus !== 'connecting') return;
   try{
+    // Avant de pousser, on récupère et fusionne la dernière version distante — c'est l'étape
+    // qui manquait auparavant : sans elle, deux appareils actifs en même temps s'écrasaient l'un
+    // l'autre à CHAQUE sauvegarde normale (2 secondes après chaque modification), pas seulement
+    // lors d'un rechargement explicite ou de la vérification toutes les 20 secondes. Cette même
+    // fonction sert donc désormais de point unique de synchronisation, appelé de partout.
+    const before = snapshotDataOnly(buildSnapshot());
+    const remoteSnap = await downloadFromOneDrive();
+    if(remoteSnap) mergeSnapshot(remoteSnap);
+    const after = snapshotDataOnly(buildSnapshot());
     await uploadToOneDrive(JSON.stringify(buildSnapshot()));
     oneDriveLastSync = new Date();
-    toast('✓ Enregistré', 1400); // toast() ne déclenche pas de rendu — pas de risque de boucle
-    if(oneDriveError){ oneDriveError = ''; render(); } // n'affiche à nouveau que si une erreur précédente doit être effacée
+    if(before !== after){
+      // La fusion a intégré une modification faite ailleurs : on l'affiche tout de suite.
+      if(!DB.companies.find(c=>c.id===state.selectedCompanyId)){
+        state.selectedCompanyId = computeStartingCompanyId();
+      }
+      render();
+      toast('🔄 Synchronisé avec un autre appareil', 2200);
+    } else {
+      toast('✓ Enregistré', 1400);
+    }
   }catch(e){
     console.error('Sauvegarde OneDrive échouée', e);
     oneDriveError = e.message || String(e);
@@ -8888,21 +8913,9 @@ async function reloadFromOneDrive(){
   oneDriveStatus = 'connecting';
   render();
   try{
-    // Important : on ne pousse JAMAIS la version locale avant d'avoir récupéré la dernière
-    // version distante. On la FUSIONNE (mergeSnapshot) plutôt que de la remplacer, pour que les
-    // modifications faites ici ET celles faites sur l'autre appareil cohabitent — puis on
-    // repousse le résultat combiné, pour que l'autre appareil en profite aussi ensuite.
     clearTimeout(__autoSaveTimer);
-    const snap = await downloadFromOneDrive();
-    if(snap){
-      mergeSnapshot(snap);
-      state.selectedCompanyId = computeStartingCompanyId();
-      toast('Données synchronisées avec OneDrive.');
-      render();
-      await saveToOneDrive();
-    } else {
-      toast('Aucune donnée trouvée sur OneDrive pour le moment.');
-    }
+    __autoSaveTimer = null;
+    await saveToOneDrive(); // récupère, fusionne et repousse en un seul point unique
     oneDriveStatus = 'connected';
   }catch(e){
     console.error('Rechargement OneDrive échoué', e);
@@ -9088,28 +9101,14 @@ function startAutoPull(){
 }
 async function checkForRemoteUpdates(){
   if(oneDriveStatus !== 'connected') return;
-  if(__autoSaveTimer) return; // une modification locale est en attente d'envoi : on ne touche à rien
+  if(__autoSaveTimer) return; // une modification locale est en attente d'envoi : elle fera le travail
   if(state.ocrStatus) return; // un scan de carte est en cours
   const active = document.activeElement;
   const isTyping = active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName);
   if(isTyping) return; // ne jamais interrompre une saisie en cours, même dans un champ sans rapport
   if(document.querySelector('.modal-overlay')) return; // ne pas perturber une fenêtre modale ouverte
   try{
-    const snap = await downloadFromOneDrive();
-    if(snap && snapshotDataOnly(snap) !== snapshotDataOnly(buildSnapshot())){
-      mergeSnapshot(snap);
-      if(!DB.companies.find(c=>c.id===state.selectedCompanyId)){
-        state.selectedCompanyId = computeStartingCompanyId();
-      }
-      render();
-      // On vient de fusionner : le résultat peut contenir des modifications locales que l'autre
-      // appareil n'a pas encore — on le repousse pour qu'il en profite à son tour, plutôt que de
-      // laisser le minuteur normal s'en charger 2 secondes plus tard (même résultat, plus direct).
-      clearTimeout(__autoSaveTimer);
-      __autoSaveTimer = null;
-      await saveToOneDrive();
-      toast('🔄 Synchronisé avec un autre appareil', 2200);
-    }
+    await saveToOneDrive(); // récupère, fusionne et repousse en un seul point unique
   }catch(e){
     console.warn('Vérification automatique des mises à jour échouée', e);
   }
