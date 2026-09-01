@@ -483,6 +483,17 @@
   .modal-head{padding:18px 22px;border-bottom:1px solid var(--line);}
   .modal-head .mh-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--teal-dark);font-weight:700;}
   .modal-head .mh-title{font-size:16px;font-weight:700;margin-top:4px;}
+  .onenote-review-modal{width:640px;display:flex;flex-direction:column;max-height:85vh;}
+  .onenote-review-modal .modal-head{display:flex;justify-content:space-between;align-items:center;}
+  .onenote-review-modal .modal-head h2{font-size:16px;font-weight:700;}
+  .onenote-candidates-list{overflow-y:auto;flex:1;padding:10px 20px;display:flex;flex-direction:column;gap:8px;}
+  .onenote-candidate{display:flex;gap:10px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
+  .onenote-candidate.onc-excluded{opacity:.45;}
+  .onc-checkbox{padding-top:3px;}
+  .onc-body{flex:1;min-width:0;}
+  .onc-title{font-weight:700;font-size:13.5px;margin-bottom:2px;}
+  .onc-preview{font-size:12px;color:var(--ink-500);margin-bottom:6px;white-space:pre-wrap;}
+  .onc-body select{width:100%;}
   .modal-body{padding:18px 22px;display:flex;flex-direction:column;gap:16px;}
   .modal-field label{font-size:11.5px;font-weight:700;color:var(--ink-700);display:block;margin-bottom:6px;}
   .modal-field textarea{
@@ -7124,6 +7135,7 @@ function renderEntreprisesPage(){
         <div style="font-size:12.5px;color:var(--ink-500);">${list.length} sur ${DB.companies.length} — triez une colonne en cliquant sur son en-tête</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn" onclick="triggerImportOneNote()" ${state.ocrStatus==='onenote'?'disabled':''}>${state.ocrStatus==='onenote'?'⏳ Lecture…':'📓 Importer OneNote'}</button>
         <button class="btn" onclick="triggerImportContacts()">📱 Importer mes contacts</button>
         <button class="btn" onclick="triggerImportBackup()">⬆️ Importer</button>
         <button class="btn" onclick="triggerScanBusinessCard('new')" ${state.ocrStatus?'disabled':''}>${state.ocrStatus?'⏳ Lecture…':'📇 Scanner une carte'}</button>
@@ -7131,6 +7143,7 @@ function renderEntreprisesPage(){
       </div>
       <input type="file" id="import-backup-input" accept="application/json" style="display:none;" onchange="importDataBackup(this)">
       <input type="file" id="import-contacts-input" accept=".vcf,.vcard,text/vcard" style="display:none;" onchange="importContactsVCF(this)">
+      <input type="file" id="import-onenote-input" accept=".docx" style="display:none;" onchange="importOneNoteDocx(this)">
     </div>
 
     ${renderInlineCompanyForm()}
@@ -8352,6 +8365,7 @@ function render(){
     ${renderTopbar()}
     ${mainHtml}
     ${renderModal()}
+    ${oneNoteReviewOpen ? renderOneNoteReview() : ''}
   `;
 
   if(modalScrollTop != null){
@@ -8457,6 +8471,29 @@ async function loadOcrLibrary(){
       if(typeof Tesseract !== 'undefined'){ ocrLibLoaded = true; return true; }
     }catch(e){
       console.warn('Serveur OCR indisponible, tentative suivante…', e);
+    }
+  }
+  return false;
+}
+
+/* ---------------------------- IMPORT DE NOTES ONENOTE (fichier Word exporté) ----------------------------
+   Lit un fichier .docx exporté depuis OneNote (Fichier > Exporter > Word) entièrement dans le
+   navigateur, sans rien envoyer sur un serveur. Chaque titre de page OneNote (repris comme titre
+   dans le Word exporté) devient une note candidate, que l'utilisateur rattache ensuite à la bonne
+   entreprise avant validation. */
+const DOCX_CDNS = [
+  'https://cdn.jsdelivr.net/npm/mammoth@1/mammoth.browser.min.js',
+  'https://unpkg.com/mammoth@1/mammoth.browser.min.js',
+];
+let docxLibLoaded = false;
+async function loadDocxLibrary(){
+  if(docxLibLoaded) return true;
+  for(const url of DOCX_CDNS){
+    try{
+      await loadScriptOnce(url);
+      if(typeof mammoth !== 'undefined'){ docxLibLoaded = true; return true; }
+    }catch(e){
+      console.warn('Serveur de lecture Word indisponible, tentative suivante…', e);
     }
   }
   return false;
@@ -8951,6 +8988,147 @@ function triggerImportBackup(){
   const input = document.getElementById('import-backup-input');
   if(input) input.click();
 }
+let oneNoteCandidates = [];
+let oneNoteReviewOpen = false;
+
+function triggerImportOneNote(){
+  const input = document.getElementById('import-onenote-input');
+  if(input) input.click();
+}
+
+async function importOneNoteDocx(input){
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+  state.ocrStatus = 'onenote'; // réutilise le même indicateur "chargement" que le scan de carte
+  render();
+  try{
+    const loaded = await loadDocxLibrary();
+    if(!loaded){
+      toast('Lecture des fichiers Word indisponible pour le moment (vérifiez votre connexion).');
+      state.ocrStatus = null; render();
+      return;
+    }
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.convertToHtml({arrayBuffer});
+    const container = document.createElement('div');
+    container.innerHTML = result.value;
+
+    // Chaque titre de page OneNote devient, dans le Word exporté, un titre (H1/H2/H3) — on
+    // découpe donc le document sur ces titres pour retrouver une note par page d'origine.
+    const candidates = [];
+    let current = null;
+    Array.from(container.children).forEach(el => {
+      if(/^H[1-3]$/.test(el.tagName)){
+        if(current && (current.title || current.content.trim())) candidates.push(current);
+        current = {title: el.textContent.trim(), content: ''};
+      } else if(current){
+        const text = el.textContent.trim();
+        if(text) current.content += (current.content?'\n':'') + text;
+      }
+    });
+    if(current && (current.title || current.content.trim())) candidates.push(current);
+
+    if(!candidates.length){
+      toast('Aucune page trouvée dans ce fichier — vérifiez qu\'il contient bien des titres de page (dans OneNote : Fichier > Exporter > Word).');
+      state.ocrStatus = null; render();
+      return;
+    }
+
+    // Correspondance automatique avec les entreprises déjà connues, à partir du titre de page
+    const companyByKey = new Map();
+    DB.companies.forEach(co => { const k = normKeyLoose(co.nom); if(k) companyByKey.set(k, co); });
+    oneNoteCandidates = candidates.map((c, i) => {
+      const titleKey = normKeyLoose(c.title);
+      let matched = null;
+      if(titleKey){
+        for(const [key, co] of companyByKey){
+          if(titleKey.includes(key) || key.includes(titleKey)){ matched = co; break; }
+        }
+      }
+      return { id: 'onc'+i, title: c.title, content: c.content, companyId: matched ? matched.id : '', include: true };
+    });
+    oneNoteReviewOpen = true;
+    state.ocrStatus = null;
+    render();
+  }catch(err){
+    console.error('Lecture du fichier Word échouée', err);
+    toast('Fichier Word illisible ou invalide.');
+    state.ocrStatus = null;
+    render();
+  }
+}
+
+function closeOneNoteReview(){
+  oneNoteReviewOpen = false;
+  oneNoteCandidates = [];
+  render();
+}
+function setOneNoteCandidateCompany(id, companyId){
+  const c = oneNoteCandidates.find(x=>x.id===id);
+  if(c) c.companyId = companyId;
+}
+function toggleOneNoteCandidateInclude(id){
+  const c = oneNoteCandidates.find(x=>x.id===id);
+  if(c) c.include = !c.include;
+  render();
+}
+function confirmOneNoteImport(){
+  const toImport = oneNoteCandidates.filter(c => c.include && c.companyId);
+  if(!toImport.length){
+    toast('Sélectionnez au moins une note avec une entreprise assignée.');
+    return;
+  }
+  toImport.forEach(c => {
+    DB.notes.push({
+      id: gen_id_client('onenote'), companyId: c.companyId, contactId:null, opportunityId:null,
+      date: todayStr, texte: (c.title ? c.title+'\n\n' : '') + c.content, type:'note', photos:[],
+    });
+  });
+  const skipped = oneNoteCandidates.length - toImport.length;
+  toast(`${toImport.length} note(s) importée(s) depuis OneNote${skipped?`, ${skipped} ignorée(s)`:''}.`, 4000);
+  oneNoteReviewOpen = false;
+  oneNoteCandidates = [];
+  render();
+  setTimeout(saveNow, 1500);
+}
+function renderOneNoteReview(){
+  const assignedCount = oneNoteCandidates.filter(c=>c.include && c.companyId).length;
+  return `
+  <div class="modal-overlay" onclick="if(event.target===this) closeOneNoteReview()">
+    <div class="modal onenote-review-modal">
+      <div class="modal-head">
+        <h2>Import de notes OneNote</h2>
+        <button class="btn ghost small" onclick="closeOneNoteReview()">✕</button>
+      </div>
+      <div style="padding:0 20px 4px;font-size:12.5px;color:var(--ink-500);">
+        ${oneNoteCandidates.length} page(s) trouvée(s). Rattachez chacune à la bonne entreprise (les correspondances évidentes sont déjà proposées), décochez celles à ignorer.
+      </div>
+      <div class="onenote-candidates-list">
+        ${oneNoteCandidates.map(c => `
+          <div class="onenote-candidate ${c.include?'':'onc-excluded'}">
+            <label class="onc-checkbox">
+              <input type="checkbox" ${c.include?'checked':''} onchange="toggleOneNoteCandidateInclude('${c.id}')">
+            </label>
+            <div class="onc-body">
+              <div class="onc-title">${esc(c.title || '(sans titre)')}</div>
+              <div class="onc-preview">${esc(c.content.slice(0,140))}${c.content.length>140?'…':''}</div>
+              <select onchange="setOneNoteCandidateCompany('${c.id}', this.value)" ${!c.include?'disabled':''}>
+                <option value="">— Choisir l'entreprise —</option>
+                ${DB.companies.slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(co=>`<option value="${co.id}" ${c.companyId===co.id?'selected':''}>${esc(co.nom)}</option>`).join('')}
+              </select>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="inline-form-actions" style="padding:14px 20px;border-top:1px solid var(--line);">
+        <div style="margin-right:auto;font-size:12.5px;color:var(--ink-500);">${assignedCount} note(s) prête(s) à importer</div>
+        <button class="btn" onclick="closeOneNoteReview()">Annuler</button>
+        <button class="btn primary" onclick="confirmOneNoteImport()">Importer ${assignedCount>0?`(${assignedCount})`:''}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function importDataBackup(input){
   const file = input.files && input.files[0];
   if(!file) return;
