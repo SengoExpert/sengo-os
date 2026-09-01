@@ -4833,6 +4833,8 @@ let DB = {
 
   history: [], // calculé dynamiquement
   tournees: [], // tournées commerciales créées depuis la carte
+  tombstones: [], // {id, type, deletedAt} — trace des suppressions, pour que la fusion entre
+                   // appareils ne fasse pas "revivre" une fiche supprimée ailleurs
 };
 
 /* ---------------------------- PRESTATAIRES (Phase 2) ---------------------------- */
@@ -5089,6 +5091,23 @@ function simplifySecteur(raw){
   return 'Industrie'; // secteurs divers non classables (holding, conseil, assurance, édition…)
 }
 DB.companies.forEach(c => { c.secteurDetail = c.secteur; c.secteur = simplifySecteur(c.secteur); });
+
+// Pré-datage à 0 de toutes les données de démonstration : sans ça, le tout premier affichage de
+// l'app (avant toute connexion OneDrive) leur donnerait un horodatage "maintenant", et elles
+// gagneraient alors à tort face à une vraie modification/suppression faite ailleurs lors d'une
+// fusion — la démo est censée perdre systématiquement face à une vraie donnée synchronisée.
+// Placé ici (tout à la fin de la préparation des données) pour couvrir aussi les champs ajoutés
+// en cours de route par les traitements ci-dessus (ex. secteurDetail, prestataire).
+(function preDateSeedData(){
+  const excluded = new Set(['_updatedAt','_fieldTimestamps','_deptCache','id']);
+  [DB.companies, DB.contacts, DB.tasks, DB.notes, DB.opportunities, DB.documents, DB.tournees].forEach(arr => {
+    arr.forEach(r => {
+      r._fieldTimestamps = {};
+      Object.keys(r).forEach(field => { if(!excluded.has(field)) r._fieldTimestamps[field] = 0; });
+      r._updatedAt = 0;
+    });
+  });
+})();
 
 
 
@@ -5602,6 +5621,9 @@ function viewCompanyInline(cid){
 
 /* ---------------------------- HELPERS ---------------------------- */
 const byId = (arr,id) => arr.find(x=>x.id===id);
+function recordDeletion(type, id){
+  DB.tombstones.push({id, type, deletedAt: Date.now()});
+}
 function matchesPrestataireFilter(company){
   return state.prestataireFilter==='tous' || (company && company.prestataire===state.prestataireFilter);
 }
@@ -5740,7 +5762,7 @@ function saveEditTask(){
 }
 function deleteTaskFromEdit(){
   const idx = DB.tasks.findIndex(t=>t.id===state.editingTaskId);
-  if(idx>=0) DB.tasks.splice(idx,1);
+  if(idx>=0){ recordDeletion('task', DB.tasks[idx].id); DB.tasks.splice(idx,1); }
   state.editingTaskId = null;
   toast('Tâche supprimée.');
   render();
@@ -5870,6 +5892,7 @@ function addNote(cid){
 function deleteNote(noteId){
   const idx = DB.notes.findIndex(n=>n.id===noteId);
   if(idx<0) return;
+  recordDeletion('note', noteId);
   DB.notes.splice(idx,1);
   toast('Note supprimée.');
   render();
@@ -6150,6 +6173,12 @@ function deleteCompany(cid){
   render();
 }
 function performDeleteCompany(cid){
+  DB.tasks.filter(t=>t.companyId===cid).forEach(t=>recordDeletion('task', t.id));
+  DB.contacts.filter(k=>k.companyId===cid).forEach(k=>recordDeletion('contact', k.id));
+  DB.opportunities.filter(o=>o.companyId===cid).forEach(o=>recordDeletion('opportunity', o.id));
+  DB.notes.filter(n=>n.companyId===cid).forEach(n=>recordDeletion('note', n.id));
+  DB.documents.filter(d=>d.companyId===cid).forEach(d=>recordDeletion('document', d.id));
+  recordDeletion('company', cid);
   DB.tasks = DB.tasks.filter(t=>t.companyId!==cid);
   DB.contacts = DB.contacts.filter(k=>k.companyId!==cid);
   DB.opportunities = DB.opportunities.filter(o=>o.companyId!==cid);
@@ -6205,7 +6234,7 @@ function submitContact(cid, kid){
 }
 function deleteContact(kid){
   const idx = DB.contacts.findIndex(k=>k.id===kid);
-  if(idx>=0) DB.contacts.splice(idx,1);
+  if(idx>=0){ recordDeletion('contact', kid); DB.contacts.splice(idx,1); }
   editingContactId = null;
   toast('Contact supprimé.');
   render();
@@ -6807,7 +6836,7 @@ function submitOpp(cid, oid){
 }
 function deleteOpp(oid){
   const idx = DB.opportunities.findIndex(o=>o.id===oid);
-  if(idx>=0) DB.opportunities.splice(idx,1);
+  if(idx>=0){ recordDeletion('opportunity', oid); DB.opportunities.splice(idx,1); }
   editingOppId = null;
   toast('Opportunité supprimée.');
   render();
@@ -6899,7 +6928,7 @@ function submitDoc(cid, docId){
 }
 function deleteDoc(docId){
   const idx = DB.documents.findIndex(d=>d.id===docId);
-  if(idx>=0) DB.documents.splice(idx,1);
+  if(idx>=0){ recordDeletion('document', docId); DB.documents.splice(idx,1); }
   editingDocId = null;
   toast('Document supprimé.');
   render();
@@ -7903,8 +7932,9 @@ function performDeleteTournee(tid){
   if(!tour) return;
   tour.taskIds.forEach(taskId=>{
     const idx = DB.tasks.findIndex(t=>t.id===taskId);
-    if(idx>=0) DB.tasks.splice(idx,1);
+    if(idx>=0){ recordDeletion('task', taskId); DB.tasks.splice(idx,1); }
   });
+  recordDeletion('tournee', tid);
   const tIdx = DB.tournees.findIndex(t=>t.id===tid);
   if(tIdx>=0) DB.tournees.splice(tIdx,1);
   state.activeTourneeId = DB.tournees.length ? DB.tournees[DB.tournees.length-1].id : null;
@@ -8165,7 +8195,58 @@ function postponeTaskCustom(taskId, dateStr){
 /* ---------------------------- MAIN RENDER ---------------------------- */
 let __searchActions = [];
 let __lastRenderContext = null;
+/* ---------------------------- HORODATAGE AUTOMATIQUE DES MODIFICATIONS ----------------------------
+   Plutôt que d'ajouter manuellement "ce champ vient d'être modifié" à chaque endroit du code (des
+   dizaines d'endroits différents, avec le risque d'en oublier), on compare simplement chaque champ
+   de chaque fiche à ce qu'il était lors du rendu précédent — s'il a changé, on l'horodate. Comme
+   render() est déjà appelé après CHAQUE modification dans toute l'app, ce point unique suffit à
+   tout couvrir. L'horodatage est fait CHAMP PAR CHAMP (pas fiche entière) : c'est ce qui permet
+   ensuite à une fusion avec un autre appareil de combiner deux modifications différentes faites
+   sur la même fiche (ex. le téléphone modifie le numéro, l'ordinateur modifie l'adresse) au lieu
+   que l'une n'écrase complètement l'autre. */
+let __lastRenderSnapshot = {};
+const NON_DATA_FIELDS = new Set(['_updatedAt','_fieldTimestamps','_deptCache','id']);
+function stampUpdatedTimestamps(){
+  const now = Date.now();
+  const types = [
+    ['companies', DB.companies], ['contacts', DB.contacts], ['tasks', DB.tasks],
+    ['notes', DB.notes], ['opportunities', DB.opportunities], ['documents', DB.documents],
+    ['tournees', DB.tournees],
+  ];
+  types.forEach(([key, arr]) => {
+    const prevMap = __lastRenderSnapshot[key] || {};
+    const newMap = {};
+    arr.forEach(r => {
+      if(!r || !r.id) return;
+      const prev = prevMap[r.id]; // copie de la fiche telle qu'elle était au rendu précédent
+      if(!r._fieldTimestamps) r._fieldTimestamps = {};
+      Object.keys(r).forEach(field => {
+        if(NON_DATA_FIELDS.has(field)) return;
+        if(prev){
+          // Fiche déjà vue lors d'un rendu précédent : comparaison normale, champ par champ.
+          if(JSON.stringify(prev[field]) !== JSON.stringify(r[field])) r._fieldTimestamps[field] = now;
+        } else if(r._fieldTimestamps[field] === undefined){
+          // Fiche jamais vue ET ce champ précis n'a aucun historique connu (ni pré-datage des
+          // données de démo, ni horodatage réel venu d'une synchronisation) : c'est une création
+          // locale toute fraîche, on l'horodate à "maintenant" normalement.
+          r._fieldTimestamps[field] = now;
+        }
+        // Sinon (fiche jamais vue mais déjà porteuse d'un horodatage — données de démo pré-datées
+        // à 0, ou vraie donnée chargée depuis OneDrive) : on ne touche à rien, l'existant fait foi.
+        // Sans cette distinction, les données de démo du tout premier affichage se retrouveraient
+        // horodatées "maintenant", et gagneraient à tort face à une vraie suppression/modification
+        // faite ailleurs, pourtant bien plus digne de confiance.
+      });
+      const allStamps = Object.values(r._fieldTimestamps);
+      r._updatedAt = allStamps.length ? Math.max(...allStamps) : now; // usage global (tri, etc.)
+      newMap[r.id] = JSON.parse(JSON.stringify(r)); // copie pour la comparaison du prochain rendu
+    });
+    __lastRenderSnapshot[key] = newMap;
+  });
+}
+
 function render(){
+  stampUpdatedTimestamps();
   const results = searchResults(state.searchQuery);
   __searchActions = results.map(r=>r.action);
 
@@ -8585,13 +8666,17 @@ let oneDriveError = '';
 
 function buildSnapshot(){
   return {
-    version: 1, savedAt: new Date().toISOString(),
+    version: 2, savedAt: new Date().toISOString(),
     companies: DB.companies, contacts: DB.contacts, tasks: DB.tasks,
     notes: DB.notes, opportunities: DB.opportunities, documents: DB.documents,
-    tournees: DB.tournees,
+    tournees: DB.tournees, tombstones: DB.tombstones,
   };
 }
 function applySnapshot(snap){
+  // Remplacement complet — utilisé uniquement à la connexion/reconnexion, quand les données
+  // locales ne sont que la démo de départ (rien de réel à préserver). Pour la synchronisation
+  // en cours de session (fusion avec ce qu'un autre appareil a pu modifier entre-temps), voir
+  // mergeSnapshot() ci-dessous, qui compare les dates de modification plutôt que d'écraser.
   if(!snap) return;
   if(snap.companies) DB.companies = snap.companies;
   if(snap.contacts) DB.contacts = snap.contacts;
@@ -8600,6 +8685,72 @@ function applySnapshot(snap){
   if(snap.opportunities) DB.opportunities = snap.opportunities;
   if(snap.documents) DB.documents = snap.documents;
   if(snap.tournees) DB.tournees = snap.tournees;
+  if(snap.tombstones) DB.tombstones = snap.tombstones;
+  DB.companies.forEach(c => { c._deptCache = undefined; });
+  __lastRenderSnapshot = {}; // on vient de tout remplacer : on ne compare pas ça à l'ancien état local
+}
+
+/* ---------------------------- FUSION AVEC UN AUTRE APPAREIL ----------------------------
+   Contrairement à applySnapshot() (remplacement complet), ceci compare CHAQUE CHAMP de chaque
+   fiche entre la version locale et la version distante (via _fieldTimestamps, posé automatiquement
+   par stampUpdatedTimestamps à chaque rendu) et garde, champ par champ, le plus récent des deux.
+   C'est ce qui permet à une modification faite sur le téléphone (ex. le numéro de téléphone) ET
+   une modification faite sur l'ordinateur (ex. l'adresse) sur LA MÊME fiche de cohabiter, plutôt
+   que la fiche entière la plus récente n'écrase systématiquement l'autre dans son intégralité.
+   Une fiche supprimée d'un côté après la dernière modification connue de l'autre est retirée du
+   résultat (tombstones). */
+function mergeRecordFields(local, remote){
+  const localTs = local._fieldTimestamps || {};
+  const remoteTs = remote._fieldTimestamps || {};
+  const allFields = new Set([...Object.keys(local), ...Object.keys(remote)]);
+  const merged = {id: local.id};
+  const mergedTs = {};
+  allFields.forEach(field => {
+    if(NON_DATA_FIELDS.has(field)) return;
+    const lt = localTs[field] || 0;
+    const rt = remoteTs[field] || 0;
+    merged[field] = rt > lt ? remote[field] : local[field];
+    mergedTs[field] = Math.max(lt, rt);
+  });
+  merged._fieldTimestamps = mergedTs;
+  const allStamps = Object.values(mergedTs);
+  merged._updatedAt = allStamps.length ? Math.max(...allStamps) : Math.max(local._updatedAt||0, remote._updatedAt||0);
+  return merged;
+}
+function mergeById(localArr, remoteArr, tombstones){
+  const map = new Map();
+  (localArr||[]).forEach(r => { if(r && r.id) map.set(r.id, r); });
+  (remoteArr||[]).forEach(r => {
+    if(!r || !r.id) return;
+    const existing = map.get(r.id);
+    map.set(r.id, existing ? mergeRecordFields(existing, r) : r);
+  });
+  tombstones.forEach(t => {
+    const rec = map.get(t.id);
+    if(rec && t.deletedAt >= (rec._updatedAt||0)) map.delete(t.id);
+  });
+  return Array.from(map.values());
+}
+function mergeTombstones(localT, remoteT){
+  const map = new Map();
+  (localT||[]).forEach(t => map.set(t.id, t));
+  (remoteT||[]).forEach(t => {
+    const existing = map.get(t.id);
+    if(!existing || t.deletedAt > existing.deletedAt) map.set(t.id, t);
+  });
+  return Array.from(map.values());
+}
+function mergeSnapshot(snap){
+  if(!snap) return;
+  const tombstones = mergeTombstones(DB.tombstones, snap.tombstones);
+  DB.companies = mergeById(DB.companies, snap.companies, tombstones);
+  DB.contacts = mergeById(DB.contacts, snap.contacts, tombstones);
+  DB.tasks = mergeById(DB.tasks, snap.tasks, tombstones);
+  DB.notes = mergeById(DB.notes, snap.notes, tombstones);
+  DB.opportunities = mergeById(DB.opportunities, snap.opportunities, tombstones);
+  DB.documents = mergeById(DB.documents, snap.documents, tombstones);
+  DB.tournees = mergeById(DB.tournees, snap.tournees, tombstones);
+  DB.tombstones = tombstones;
   DB.companies.forEach(c => { c._deptCache = undefined; });
 }
 
@@ -8737,16 +8888,18 @@ async function reloadFromOneDrive(){
   oneDriveStatus = 'connecting';
   render();
   try{
-    // Important : on annule toute sauvegarde encore en attente, mais on ne pousse JAMAIS la
-    // version locale avant d'avoir récupéré la dernière version distante — sinon on écraserait
-    // systématiquement les changements faits sur l'autre appareil avant même d'aller les
-    // chercher, ce qui empêchait toute synchronisation de fonctionner dans les deux sens.
+    // Important : on ne pousse JAMAIS la version locale avant d'avoir récupéré la dernière
+    // version distante. On la FUSIONNE (mergeSnapshot) plutôt que de la remplacer, pour que les
+    // modifications faites ici ET celles faites sur l'autre appareil cohabitent — puis on
+    // repousse le résultat combiné, pour que l'autre appareil en profite aussi ensuite.
     clearTimeout(__autoSaveTimer);
     const snap = await downloadFromOneDrive();
     if(snap){
-      applySnapshot(snap);
+      mergeSnapshot(snap);
       state.selectedCompanyId = computeStartingCompanyId();
-      toast('Données rechargées depuis OneDrive.');
+      toast('Données synchronisées avec OneDrive.');
+      render();
+      await saveToOneDrive();
     } else {
       toast('Aucune donnée trouvée sur OneDrive pour le moment.');
     }
@@ -8758,8 +8911,9 @@ async function reloadFromOneDrive(){
     toast('Le rechargement a échoué — réessayez.');
   }
   render();
-  // Ce qu'on vient de récupérer est déjà la version présente sur OneDrive — inutile de la
-  // repousser aussitôt (voir la même remarque dans checkForRemoteUpdates).
+  // On vient de pousser explicitement le résultat fusionné ci-dessus — le minuteur de sauvegarde
+  // programmé par ce dernier render() serait redondant (repousserait la même chose une seconde
+  // fois quelques secondes plus tard), on l'annule.
   clearTimeout(__autoSaveTimer);
   __autoSaveTimer = null;
 }
@@ -8943,16 +9097,18 @@ async function checkForRemoteUpdates(){
   try{
     const snap = await downloadFromOneDrive();
     if(snap && snapshotDataOnly(snap) !== snapshotDataOnly(buildSnapshot())){
-      applySnapshot(snap);
+      mergeSnapshot(snap);
       if(!DB.companies.find(c=>c.id===state.selectedCompanyId)){
         state.selectedCompanyId = computeStartingCompanyId();
       }
       render();
-      // Ce qu'on vient de récupérer est déjà la version présente sur OneDrive — inutile (et
-      // risqué, ça multiplie les occasions d'écrasement croisé) de la repousser aussitôt.
+      // On vient de fusionner : le résultat peut contenir des modifications locales que l'autre
+      // appareil n'a pas encore — on le repousse pour qu'il en profite à son tour, plutôt que de
+      // laisser le minuteur normal s'en charger 2 secondes plus tard (même résultat, plus direct).
       clearTimeout(__autoSaveTimer);
       __autoSaveTimer = null;
-      toast('🔄 Mis à jour depuis un autre appareil', 2200);
+      await saveToOneDrive();
+      toast('🔄 Synchronisé avec un autre appareil', 2200);
     }
   }catch(e){
     console.warn('Vérification automatique des mises à jour échouée', e);
