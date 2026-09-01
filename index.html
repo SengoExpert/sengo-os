@@ -5990,6 +5990,7 @@ function updateCompanyField(cid, field, value){
   const co = byId(DB.companies, cid);
   co[field] = value;
   if(field==='rue' || field==='codePostal' || field==='ville') syncAdresseFromParts(co);
+  render(); // sans ça, ce champ ne serait jamais horodaté ni couvert par le filet de sécurité de sauvegarde
 }
 function syncAdresseFromParts(co){
   const cpVille = [co.codePostal, co.ville].filter(Boolean).join(' ');
@@ -6348,6 +6349,7 @@ function renderTopbar(){
     </div>
     <div class="onedrive-wrap">
       ${oneDriveStatus==='connected' ? `
+        <button class="onedrive-btn" onclick="saveNow()" title="Enregistrer maintenant sur OneDrive">💾</button>
         <button class="onedrive-btn" onclick="reloadFromOneDrive()" title="Recharger les dernières données depuis OneDrive (utile après une modification faite sur un autre appareil)">🔄</button>
         <button class="onedrive-btn connected" onclick="disconnectOneDrive()" title="${oneDriveAccountEmail ? 'Connecté : '+esc(oneDriveAccountEmail)+(oneDriveLastSync?' — dernière synchro '+oneDriveLastSync.toLocaleTimeString('fr-FR'):'') : 'OneDrive connecté'}${oneDriveError ? ' — Erreur : '+esc(oneDriveError) : ''}">☁️</button>
       ` : oneDriveStatus==='connecting' ? `
@@ -8923,6 +8925,32 @@ function scheduleAutoSave(){
   __autoSaveTimer = setTimeout(() => { __autoSaveTimer = null; saveToOneDrive(); }, 2000);
 }
 
+/* Sauvegarde immédiate — court-circuite le délai de 2 secondes. Utilisée par le bouton
+   "Enregistrer" et par la validation au clavier (touche Entrée dans un champ). */
+function saveNow(){
+  clearTimeout(__autoSaveTimer);
+  __autoSaveTimer = null;
+  saveToOneDrive();
+}
+
+/* Valider par Entrée : plutôt que de laisser tourner une vérification automatique en tâche de
+   fond toutes les X secondes (consommation inutile, et donne l'impression que l'app "mouline"
+   sans arrêt), on enregistre sur demande — soit via le bouton "💾 Enregistrer", soit en appuyant
+   sur Entrée une fois la saisie terminée dans un champ. Un délai de sécurité de 2 secondes après
+   toute modification reste actif en filet de secours (scheduleAutoSave), au cas où la touche
+   Entrée ne serait pas utilisée. */
+function setupEnterToSave(){
+  document.addEventListener('keydown', (e) => {
+    if(e.key !== 'Enter') return;
+    const el = e.target;
+    if(!el || el.tagName !== 'INPUT') return; // pas les zones de texte multi-lignes (Entrée = saut de ligne)
+    if(el.type === 'file' || el.type === 'checkbox') return;
+    e.preventDefault();
+    el.blur(); // déclenche la mise à jour de la donnée (onblur existant sur la plupart des champs)
+    setTimeout(saveNow, 50); // laisse le temps au blur/à sa mise à jour de s'exécuter avant d'enregistrer
+  });
+}
+
 /* Rechargement manuel — l'app ne vérifie une éventuelle mise à jour OneDrive faite depuis un
    autre appareil qu'une seule fois, à la connexion. Si l'app reste ouverte longtemps pendant
    qu'une modification est faite ailleurs (téléphone, autre ordinateur), elle ne le sait jamais
@@ -9047,8 +9075,8 @@ function startApp(){
   // le premier scan de carte de visite soit déjà rapide (sinon le premier essai peut
   // sembler ne rien faire le temps du téléchargement, qui ne se refait pas ensuite).
   loadOcrLibrary().catch(()=>{});
-  startAutoPull();
   setupPullToRefresh();
+  setupEnterToSave();
 }
 
 /* ---------------------------- TIRER POUR ACTUALISER ----------------------------
