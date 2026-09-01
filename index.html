@@ -498,6 +498,7 @@
   /* ===== Entreprises ===== */
   .ent-page{display:flex;flex-direction:column;gap:14px;}
   .ent-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
+  .ent-detail-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
   .ent-filters{display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px;}
   .ent-filters input[type=text]{flex:1;min-width:180px;border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:13px;}
   .ent-filters select{min-width:0;max-width:100%;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12.5px;background:#fff;}
@@ -5570,6 +5571,7 @@ let state = {
   pendingConfirm: null, // {message, onConfirmFn, payload} — confirmation interne (pas de confirm() natif)
   lightboxPhotoId: null, // id de la photo affichée en grand, le cas échéant
   ocrStatus: null, // 'scanning' pendant la lecture d'une carte de visite
+  entreprisesDetailCid: null, // id de l'entreprise ouverte "sur place" depuis l'onglet Entreprises, sans changer d'onglet
   photoGalleryCompanyId: null, // id de l'entreprise dont la galerie photo est ouverte, le cas échéant
   editingTaskId: null, // id de la tâche en cours de modification (fenêtre dédiée)
   oppFilters: {statut:'tous', potentiel:'tous', q:'', companyId:null},
@@ -5586,7 +5588,17 @@ let state = {
   ctSort: {field:'nom', dir:'asc'},
   ctFilters: {role:'tous', q:''},
 };
-function setNav(n){ state.activeNav = n; render(); }
+function setNav(n){
+  state.activeNav = n;
+  if(n === 'entreprises') state.entreprisesDetailCid = null; // revient à la liste, pas à un détail resté ouvert
+  render();
+}
+function viewCompanyInline(cid){
+  state.selectedCompanyId = cid;
+  state.entreprisesDetailCid = cid;
+  state.selectedTaskId = null;
+  render();
+}
 
 /* ---------------------------- HELPERS ---------------------------- */
 const byId = (arr,id) => arr.find(x=>x.id===id);
@@ -5643,6 +5655,7 @@ function selectCompany(cid, taskId=null){
   state.selectedTaskId = taskId;
   state.editingResume = false;
   state.mobileView = 'cockpit'; // sur mobile, basculer automatiquement vers la fiche entreprise
+  if(state.entreprisesDetailCid) state.entreprisesDetailCid = cid; // reste cohérent si on change d'entreprise en vue détail
   render();
 }
 function setMobileView(v){
@@ -7111,7 +7124,7 @@ function renderEntreprisesPage(){
         </thead>
         <tbody>
           ${list.map(c=>`
-            <tr onclick="selectCompany('${c.id}');state.activeNav='aujourdhui';render()">
+            <tr onclick="viewCompanyInline('${c.id}')">
               <td>
                 <div class="ent-name">${esc(c.nom)}</div>
                 <div class="ent-ref mono">${esc(c.ref)}</div>
@@ -7123,7 +7136,7 @@ function renderEntreprisesPage(){
               <td class="mono">${formatCA(c.ca)}</td>
               <td><span class="badge potentiel-${c.potentiel}">${c.potentiel}</span></td>
               <td><span class="sector-dot" style="background:${PRESTATAIRE_COLORS[c.prestataire]}"></span>${c.prestataire}<div class="ent-region">${esc(c.partenaire)}</div></td>
-              <td><button class="btn small" onclick="event.stopPropagation();selectCompany('${c.id}');state.activeNav='aujourdhui';render()">Ouvrir →</button></td>
+              <td><button class="btn small" onclick="event.stopPropagation();viewCompanyInline('${c.id}')">Ouvrir →</button></td>
             </tr>`).join('')}
           ${!list.length ? `<tr><td colspan="9"><div class="empty-queue" style="padding:16px;">Aucune entreprise ne correspond à ces filtres.</div></td></tr>` : ''}
         </tbody>
@@ -8182,7 +8195,17 @@ function render(){
 
   let mainHtml = '';
   if(state.activeNav === 'entreprises'){
-    mainHtml = `<div class="layout-full">${renderEntreprisesPage()}</div>`;
+    if(state.entreprisesDetailCid && byId(DB.companies, state.entreprisesDetailCid)){
+      mainHtml = `<div class="layout-full">
+        <div class="ent-detail-bar">
+          <button class="btn small" onclick="state.entreprisesDetailCid=null;render()">← Retour à la liste</button>
+          <button class="btn small" onclick="state.activeNav='aujourdhui';render()">Aujourd'hui →</button>
+        </div>
+        ${renderCockpit()}
+      </div>`;
+    } else {
+      mainHtml = `<div class="layout-full">${renderEntreprisesPage()}</div>`;
+    }
   } else if(state.activeNav === 'contacts'){
     mainHtml = `<div class="layout-full">${renderContactsPage()}</div>`;
   } else if(state.activeNav === 'opportunites'){
