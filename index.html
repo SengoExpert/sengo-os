@@ -8991,12 +8991,15 @@ async function getGraphToken(){
     return resp.accessToken;
   }catch(e){
     // La fenêtre pop-up de connexion peut rester bloquée sans jamais revenir, en particulier
-    // dans une app installée sur l'écran d'accueil (mode "standalone") sur mobile — sans limite
-    // de temps ici, un clic sur "Enregistrer" pouvait alors sembler "ne rien faire" indéfiniment,
+    // dans une app installée sur l'écran d'accueil ("standalone") sur mobile — sans limite de
+    // temps ici, un clic sur "Enregistrer" pouvait alors sembler "ne rien faire" indéfiniment,
     // sans aucun message d'erreur pour comprendre pourquoi.
     try{
       const resp = await withTimeout(
-        msalInstance.acquireTokenPopup({scopes: ONEDRIVE_SCOPES}),
+        // Important : sans préciser "account" ET "loginHint" ici, la fenêtre de connexion peut
+        // afficher le compte Microsoft par défaut du navigateur (ex. le compte personnel) au
+        // lieu du compte professionnel réellement actif dans l'app.
+        msalInstance.acquireTokenPopup({scopes: ONEDRIVE_SCOPES, account, loginHint: account.username}),
         15000, 'Délai dépassé lors de l\'ouverture de la fenêtre de connexion.'
       );
       return resp.accessToken;
