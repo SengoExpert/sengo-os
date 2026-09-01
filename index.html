@@ -339,6 +339,8 @@
   .ct-link{color:var(--brand-orange-dark);text-decoration:none;font-weight:600;}
   .ct-link:hover{text-decoration:underline;}
   .ct-notes{font-size:12px;color:var(--ink-500);margin-top:5px;font-style:italic;}
+  .ct-move-box{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);}
+  .ct-move-box select{width:100%;}
 
   /* Opportunités */
   .opp-card{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px;}
@@ -6282,6 +6284,68 @@ function performDeleteCompany(cid){
   render();
 }
 
+/* ---------------------------- FUSION DE DEUX FICHES ENTREPRISE EN DOUBLE ----------------------------
+   Utile après un import (Excel, contacts téléphone, OneNote...) qui a pu recréer une fiche déjà
+   existante sous un nom légèrement différent. Transfère tout ce qui est lié à l'entreprise en
+   trop (contacts, notes, tâches, opportunités, documents) vers l'entreprise conservée, complète
+   les champs vides de celle-ci avec ceux de l'autre si utile, puis supprime le doublon. */
+let mergeCompanyOpen = false;
+function toggleMergeCompany(){
+  mergeCompanyOpen = !mergeCompanyOpen;
+  render();
+}
+const POTENTIEL_RANK = {faible:1, moyen:2, fort:3};
+function askMergeCompanies(targetId){
+  const select = document.getElementById('merge-source-select');
+  const sourceId = select ? select.value : '';
+  if(!sourceId){ toast('Choisissez d\'abord l\'entreprise en double à fusionner.'); return; }
+  const source = byId(DB.companies, sourceId);
+  const target = byId(DB.companies, targetId);
+  if(!source || !target) return;
+  const nbTasks = DB.tasks.filter(t=>t.companyId===sourceId).length;
+  const nbContacts = DB.contacts.filter(k=>k.companyId===sourceId).length;
+  const nbNotes = DB.notes.filter(n=>n.companyId===sourceId).length;
+  const nbOpps = DB.opportunities.filter(o=>o.companyId===sourceId).length;
+  const nbDocs = DB.documents.filter(d=>d.companyId===sourceId).length;
+  state.pendingConfirm = {
+    message: `Fusionner « ${source.nom} » dans « ${target.nom} » ? ${nbContacts} contact(s), ${nbTasks} tâche(s), ${nbNotes} note(s), ${nbOpps} opportunité(s) et ${nbDocs} document(s) seront transférés, puis « ${source.nom} » sera définitivement supprimée. Cette action ne peut pas être annulée.`,
+    onConfirmFn: 'performMergeCompanies',
+    payload: {sourceId, targetId},
+  };
+  render();
+}
+function performMergeCompanies(sourceId, targetId){
+  const source = byId(DB.companies, sourceId);
+  const target = byId(DB.companies, targetId);
+  if(!source || !target || sourceId === targetId) return;
+
+  DB.contacts.forEach(k => { if(k.companyId===sourceId) k.companyId = targetId; });
+  DB.notes.forEach(n => { if(n.companyId===sourceId) n.companyId = targetId; });
+  DB.tasks.forEach(t => { if(t.companyId===sourceId) t.companyId = targetId; });
+  DB.opportunities.forEach(o => { if(o.companyId===sourceId) o.companyId = targetId; });
+  DB.documents.forEach(d => { if(d.companyId===sourceId) d.companyId = targetId; });
+  DB.tournees.forEach(t => {
+    t.companyIds = [...new Set(t.companyIds.map(id => id===sourceId ? targetId : id))];
+  });
+
+  // Complète les champs vides de la fiche conservée avec ceux de la fiche fusionnée, si utile
+  ['activite','rue','codePostal','ville','adresse','region','tel','site','strategie','groupe','effectif','ca','lat','lon'].forEach(f => {
+    if((target[f]==null || target[f]==='') && source[f]!=null && source[f]!=='') target[f] = source[f];
+  });
+  if(source.statutClient === 'client') target.statutClient = 'client'; // client d'un côté = client au final
+  if((POTENTIEL_RANK[source.potentiel]||0) > (POTENTIEL_RANK[target.potentiel]||0)) target.potentiel = source.potentiel;
+
+  recordDeletion('company', sourceId);
+  const idx = DB.companies.findIndex(c=>c.id===sourceId);
+  if(idx>=0) DB.companies.splice(idx,1);
+
+  mergeCompanyOpen = false;
+  toast(`Fusion effectuée : « ${source.nom} » a été intégrée à « ${target.nom} ».`, 3500);
+  state.selectedCompanyId = targetId;
+  render();
+  setTimeout(saveNow, 200);
+}
+
 function changeOppStatus(oid, value){
   const opp = byId(DB.opportunities, oid);
   opp.statut = value;
@@ -6322,6 +6386,24 @@ function submitContact(cid, kid){
     toast('Contact ajouté.');
   }
   render();
+}
+let movingContactId = null;
+function toggleMoveContact(kid){
+  movingContactId = movingContactId === kid ? null : kid;
+  render();
+}
+function moveContactToCompany(kid){
+  const select = document.getElementById('move-target-'+kid);
+  const targetId = select ? select.value : '';
+  if(!targetId){ toast('Choisissez d\'abord une entreprise de destination.'); return; }
+  const k = byId(DB.contacts, kid);
+  const targetCo = byId(DB.companies, targetId);
+  if(!k || !targetCo) return;
+  k.companyId = targetId;
+  movingContactId = null;
+  toast(`${k.prenom} ${k.nom} déplacé vers ${targetCo.nom}.`);
+  render();
+  setTimeout(saveNow, 200);
 }
 function deleteContact(kid){
   const idx = DB.contacts.findIndex(k=>k.id===kid);
@@ -6718,7 +6800,20 @@ function renderEntreprise(co){
       </select>
     </div>
     <div class="field-row"><label>Stratégie de compte</label><textarea onblur="updateCompanyField('${co.id}','strategie',this.value)">${esc(co.strategie)}</textarea></div>
+    ${mergeCompanyOpen ? `
+    <div class="ct-move-box" style="margin-top:12px;">
+      <div style="font-size:11.5px;color:var(--ink-500);margin-bottom:6px;">Entreprise en double à fusionner dans « ${esc(co.nom)} » (elle sera supprimée après transfert de tout son contenu) :</div>
+      <select id="merge-source-select">
+        <option value="">— Choisir l'entreprise en double —</option>
+        ${DB.companies.filter(c=>c.id!==co.id).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(c=>`<option value="${c.id}">${esc(c.nom)}${c.ville?' — '+esc(c.ville):''}</option>`).join('')}
+      </select>
+      <div class="inline-form-actions" style="padding-top:8px;">
+        <button class="btn small" onclick="toggleMergeCompany()">Annuler</button>
+        <button class="btn small primary" onclick="askMergeCompanies('${co.id}')">Fusionner</button>
+      </div>
+    </div>` : ''}
     <div style="margin-top:12px;text-align:right;">
+      <button class="btn ghost" onclick="toggleMergeCompany()" style="margin-right:8px;">🔀 Fusionner un doublon</button>
       <button class="btn danger-ghost" onclick="deleteCompany('${co.id}')">🗑 Supprimer l'entreprise</button>
     </div>
   </div>`;
@@ -6737,6 +6832,7 @@ function renderContacts(co, contacts){
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
             <span class="ct-role ${k.role}">${k.role}</span>
+            <button class="btn ghost small" title="Déplacer vers une autre entreprise" onclick="toggleMoveContact('${k.id}')">↔️</button>
             <button class="btn ghost small" title="Modifier" onclick="toggleEditContact('${k.id}')">✎</button>
           </div>
         </div>
@@ -6746,6 +6842,18 @@ function renderContacts(co, contacts){
           ${k.email ? `<a class="ct-link" href="mailto:${esc(k.email)}">✉️ ${esc(k.email)}</a>`:''}
         </div>
         ${k.notes ? `<div class="ct-notes">${esc(k.notes)}</div>` : ''}
+        ${movingContactId===k.id ? `
+        <div class="ct-move-box">
+          <div style="font-size:11.5px;color:var(--ink-500);margin-bottom:6px;">Déplacer ${esc(k.prenom)} ${esc(k.nom)} vers :</div>
+          <select id="move-target-${k.id}">
+            <option value="">— Choisir l'entreprise de destination —</option>
+            ${DB.companies.filter(c=>c.id!==co.id).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(c=>`<option value="${c.id}">${esc(c.nom)}${c.ville?' — '+esc(c.ville):''}</option>`).join('')}
+          </select>
+          <div class="inline-form-actions" style="padding-top:8px;">
+            <button class="btn small" onclick="toggleMoveContact(null)">Annuler</button>
+            <button class="btn small primary" onclick="moveContactToCompany('${k.id}')">Déplacer</button>
+          </div>
+        </div>` : ''}
       </div>`).join('') : `<div class="empty-queue">Aucun contact enregistré.</div>`}
     ${renderInlineContactForm(co.id)}
   </div>`;
@@ -8100,6 +8208,7 @@ function confirmYes(){
   state.pendingConfirm = null;
   if(pc.onConfirmFn === 'performDeleteTournee') performDeleteTournee(pc.payload);
   if(pc.onConfirmFn === 'performDeleteCompany') performDeleteCompany(pc.payload);
+  if(pc.onConfirmFn === 'performMergeCompanies') performMergeCompanies(pc.payload.sourceId, pc.payload.targetId);
   render();
 }
 
