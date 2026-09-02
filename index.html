@@ -6645,7 +6645,31 @@ function submitTask(cid){
 
 function runSearch(q){
   state.searchQuery = q;
-  render();
+  // Important : PAS de render() complet ici. Reconstruire toute la page à chaque lettre tapée
+  // détruit et recrée le champ de saisie lui-même (même en y restaurant le focus ensuite) — sur
+  // mobile, ça peut pousser le navigateur à vouloir "refaire défiler jusqu'au champ actif" à
+  // chaque frappe, même s'il est déjà bien visible, donnant l'impression que l'écran saute sans
+  // arrêt. On ne touche donc qu'au dropdown de résultats, jamais au champ lui-même.
+  renderSearchResultsOnly();
+}
+function renderSearchResultsOnly(){
+  const wrap = document.querySelector('.search-wrap');
+  if(!wrap) return;
+  const existing = wrap.querySelector('.search-results');
+  const results = searchResults(state.searchQuery);
+  __searchActions = results.map(r=>r.action);
+  if(state.searchQuery.length > 1){
+    const html = `
+      <div class="search-results">
+        ${results.length ? results.map((r,i)=>`
+          <div class="sr-item" onclick='runSearchAction(${i})'>
+            <span>${esc(r.label)}</span><span class="sr-tag">${r.tag}</span>
+          </div>`).join('') : `<div class="sr-empty">Aucun résultat pour « ${esc(state.searchQuery)} »</div>`}
+      </div>`;
+    if(existing) existing.outerHTML = html; else wrap.insertAdjacentHTML('beforeend', html);
+  } else if(existing){
+    existing.remove();
+  }
 }
 let searchExpanded = false;
 function toggleSearchExpanded(e){
@@ -10077,6 +10101,23 @@ function renderUnlessTyping(){
   if(!isTyping) render();
 }
 
+// Met à jour uniquement l'icône ☁️ (état synchronisé/non synchronisé), sans jamais passer par un
+// render() complet. C'est essentiel : render() relance systématiquement scheduleAutoSave() à sa
+// toute fin (voir son commentaire) — l'appeler ici, après CHAQUE sauvegarde réussie ou échouée,
+// redéclencherait donc une nouvelle sauvegarde 2 secondes plus tard, qui rappellerait cette même
+// fonction, etc. : une boucle sans fin affichant "✓ Enregistré" toutes les 2-3 secondes, sans
+// aucune action de l'utilisateur.
+function updateOneDriveIconOnly(){
+  const btn = document.querySelector('.onedrive-btn.connected');
+  if(!btn) return;
+  btn.classList.toggle('unsynced', hasUnsyncedChanges);
+  btn.textContent = hasUnsyncedChanges ? '☁️⚠️' : '☁️';
+  btn.setAttribute('onclick', hasUnsyncedChanges ? 'saveToOneDrive()' : 'disconnectOneDrive()');
+  btn.title = hasUnsyncedChanges
+    ? '⚠️ Pas de réseau — vos données sont en sécurité sur cet appareil. Cliquer pour réessayer maintenant (une reprise automatique aura de toute façon lieu dès que le réseau revient)'
+    : (oneDriveAccountEmail ? 'Connecté : '+oneDriveAccountEmail+(oneDriveLastSync?' — dernière synchro '+oneDriveLastSync.toLocaleTimeString('fr-FR'):'') : 'OneDrive connecté');
+}
+
 let __saveInFlight = false;
 let __saveQueued = false;
 async function saveToOneDrive(){
@@ -10114,13 +10155,16 @@ async function saveToOneDrive(){
       // mais surtout jamais en interrompant une sélection ou une saisie en cours (même logique
       // de protection que les deux autres branches ci-dessous) — les données fusionnées restent
       // de toute façon bien en mémoire, elles s'afficheront simplement au tout prochain rendu.
+      // Cas rare (une vraie modification distante), donc le seul où un render() complet reste
+      // justifié malgré son redéclenchement de scheduleAutoSave() — la sauvegarde suivante,
+      // elle, retombera normalement dans la branche "else" ci-dessous, qui ne boucle jamais.
       if(!DB.companies.find(c=>c.id===state.selectedCompanyId)){
         state.selectedCompanyId = computeStartingCompanyId();
       }
       renderUnlessTyping();
       toast('🔄 Synchronisé avec un autre appareil', 2200);
     } else {
-      renderUnlessTyping();
+      updateOneDriveIconOnly();
       toast('✓ Enregistré', 1400);
     }
   }catch(e){
@@ -10129,13 +10173,12 @@ async function saveToOneDrive(){
     hasUnsyncedChanges = true;
     registerOnlineRetry();
     toast('⚠️ Pas de réseau — vos données sont gardées en sécurité sur cet appareil, l\'enregistrement en ligne reprendra automatiquement dès que la connexion reviendra.', 4500);
-    // Important : reconstruire toute la page ici (comme le fait render()) referme brutalement
-    // tout menu déroulant ouvert et fait disparaître le clavier d'une saisie en cours — un vrai
-    // problème hors-ligne, puisque CHAQUE sauvegarde automatique échoue alors et déclenchait ça
-    // à chaque fois. toast() ci-dessus suffit à afficher le message sans reconstruire quoi que ce
-    // soit ; on ne rafraîchit l'icône ☁️⚠️ que si l'utilisateur n'est pas activement en train de
-    // saisir quelque chose (elle se mettra de toute façon à jour au tout prochain rendu normal).
-    renderUnlessTyping();
+    // Important : ne jamais reconstruire toute la page ici (voir updateOneDriveIconOnly) —
+    // ça referme brutalement tout menu déroulant ouvert ou fait disparaître le clavier d'une
+    // saisie en cours, et surtout ça relance scheduleAutoSave() en boucle toutes les 2 secondes
+    // tant que le réseau reste indisponible (la reprise automatique au retour du réseau est de
+    // toute façon déjà gérée par registerOnlineRetry() ci-dessus).
+    updateOneDriveIconOnly();
   }
   __saveInFlight = false;
   if(__saveQueued){
