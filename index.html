@@ -104,6 +104,8 @@
   }
   .onedrive-btn:hover{background:rgba(255,255,255,.2);}
   .onedrive-btn.connected{background:#fff;border-color:#fff;filter:none;}
+  .onedrive-btn.unsynced{background:var(--amber);border-color:var(--amber);color:#fff;animation:unsynced-pulse 2s ease-in-out infinite;}
+  @keyframes unsynced-pulse{0%,100%{opacity:1;}50%{opacity:.6;}}
   .onedrive-btn:disabled{opacity:.5;cursor:default;}
   .search-wrap{position:relative;flex:none;}
   .search-wrap.expanded{
@@ -6738,7 +6740,7 @@ function renderTopbar(){
     <div class="onedrive-wrap">
       ${oneDriveStatus==='connected' ? `
         <button class="onedrive-btn" onclick="reloadFromOneDrive()" title="Recharger les dernières données depuis OneDrive (utile après une modification faite sur un autre appareil)">🔄</button>
-        <button class="onedrive-btn connected" onclick="disconnectOneDrive()" title="${oneDriveAccountEmail ? 'Connecté : '+esc(oneDriveAccountEmail)+(oneDriveLastSync?' — dernière synchro '+oneDriveLastSync.toLocaleTimeString('fr-FR'):'') : 'OneDrive connecté'}${oneDriveError ? ' — Erreur : '+esc(oneDriveError) : ''}">☁️</button>
+        <button class="onedrive-btn connected ${hasUnsyncedChanges?'unsynced':''}" onclick="${hasUnsyncedChanges?'saveToOneDrive()':'disconnectOneDrive()'}" title="${hasUnsyncedChanges ? '⚠️ Pas de réseau — vos données sont en sécurité sur cet appareil. Cliquer pour réessayer maintenant (une reprise automatique aura de toute façon lieu dès que le réseau revient)' : (oneDriveAccountEmail ? 'Connecté : '+esc(oneDriveAccountEmail)+(oneDriveLastSync?' — dernière synchro '+oneDriveLastSync.toLocaleTimeString('fr-FR'):'') : 'OneDrive connecté')}">☁️${hasUnsyncedChanges?'⚠️':''}</button>
       ` : oneDriveStatus==='connecting' ? `
         <button class="onedrive-btn" disabled title="Connexion à OneDrive en cours…">☁️</button>
       ` : oneDriveStatus==='unavailable' ? `
@@ -10013,6 +10015,37 @@ async function uploadToOneDrive(jsonString){
   }
 }
 
+/* ---------------------------- FILET DE SÉCURITÉ LOCAL (hors-ligne / réseau instable) ----------------------------
+   Avant même de tenter la sauvegarde en ligne, on écrit systématiquement une copie de secours
+   dans le navigateur (localStorage) — qui, contrairement à la mémoire de l'onglet, survit à une
+   fermeture d'onglet, un rechargement de page ou même un redémarrage de l'ordinateur. Ainsi,
+   même si le réseau tombe en pleine saisie, rien n'est perdu : dès que le réseau revient, la
+   sauvegarde en ligne reprend automatiquement, sans que l'utilisateur ait à faire quoi que ce
+   soit. */
+const LOCAL_BACKUP_KEY = 'sengo_os_local_backup';
+function saveLocalBackup(){
+  try{ localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(buildSnapshot())); }
+  catch(e){ console.warn('Sauvegarde locale de secours impossible (espace de stockage plein ?)', e); }
+}
+function loadLocalBackup(){
+  try{
+    const raw = localStorage.getItem(LOCAL_BACKUP_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+let hasUnsyncedChanges = false;
+let __onlineRetryRegistered = false;
+function registerOnlineRetry(){
+  if(__onlineRetryRegistered) return; // un seul écouteur suffit pour toute la durée de vie de la page
+  __onlineRetryRegistered = true;
+  window.addEventListener('online', () => {
+    if(hasUnsyncedChanges && (oneDriveStatus==='connected' || oneDriveStatus==='error')){
+      toast('🌐 Réseau retrouvé — reprise de la synchronisation…', 2500);
+      saveToOneDrive();
+    }
+  });
+}
+
 let __saveInFlight = false;
 let __saveQueued = false;
 async function saveToOneDrive(){
@@ -10029,6 +10062,9 @@ async function saveToOneDrive(){
   __saveInFlight = true;
   oneDriveError = ''; // on repart propre à chaque tentative — sinon une erreur passée resterait
                        // affichée indéfiniment, même une fois la connexion redevenue normale
+
+  saveLocalBackup(); // toujours en premier, avant même de savoir si le réseau va répondre
+
   try{
     // Avant de pousser, on récupère et fusionne la dernière version distante — c'est l'étape
     // qui manquait auparavant : sans elle, deux appareils actifs en même temps s'écrasaient l'un
@@ -10041,6 +10077,7 @@ async function saveToOneDrive(){
     const after = snapshotDataOnly(buildSnapshot());
     await uploadToOneDrive(JSON.stringify(buildSnapshot()));
     oneDriveLastSync = new Date();
+    hasUnsyncedChanges = false;
     if(before !== after){
       // La fusion a intégré une modification faite ailleurs : on l'affiche tout de suite.
       if(!DB.companies.find(c=>c.id===state.selectedCompanyId)){
@@ -10049,12 +10086,16 @@ async function saveToOneDrive(){
       render();
       toast('🔄 Synchronisé avec un autre appareil', 2200);
     } else {
+      render(); // même sans fusion, on rafraîchit l'affichage — sinon l'icône ☁️⚠️ reste bloquée
+                // visuellement sur l'état "non synchronisé" même une fois la sauvegarde repassée
       toast('✓ Enregistré', 1400);
     }
   }catch(e){
     console.error('Sauvegarde OneDrive échouée', e);
     oneDriveError = e.message || String(e);
-    toast('⚠️ Échec de l\'enregistrement — ' + oneDriveError, 3500); // visible même sur mobile, où l'infobulle ne s'affiche jamais
+    hasUnsyncedChanges = true;
+    registerOnlineRetry();
+    toast('⚠️ Pas de réseau — vos données sont gardées en sécurité sur cet appareil, l\'enregistrement en ligne reprendra automatiquement dès que la connexion reviendra.', 4500);
     render();
   }
   __saveInFlight = false;
@@ -10278,15 +10319,39 @@ async function initOneDrive(){
       oneDriveStatus = 'connecting';
       render();
       const snap = await downloadFromOneDrive();
-      applySnapshot(snap);
+      // Si l'ordinateur a été éteint (ou l'onglet fermé) alors que le réseau était coupé en
+      // pleine saisie, des modifications ont pu ne JAMAIS atteindre OneDrive. Sans cette
+      // vérification, la version distante (plus ancienne) écraserait purement et simplement ces
+      // modifications au prochain démarrage — exactement la perte de données à éviter.
+      const localBackup = loadLocalBackup();
+      const localIsNewer = localBackup && (!snap || !snap.savedAt || new Date(localBackup.savedAt) > new Date(snap.savedAt));
+      if(localIsNewer){
+        applySnapshot(localBackup);
+        if(snap) mergeSnapshot(snap);
+        toast('📦 Des modifications faites hors-ligne ont été retrouvées et récupérées.', 4500);
+      } else {
+        applySnapshot(snap);
+      }
       state.selectedCompanyId = computeStartingCompanyId();
       oneDriveStatus = 'connected';
       toast('OneDrive : ' + oneDriveAccountEmail, 5000);
+      if(localIsNewer) saveToOneDrive(); // pousse immédiatement la récupération, pour ne pas rester exposé au même risque
     }
   }catch(e){
     console.error('Restauration OneDrive échouée', e);
     oneDriveStatus = 'error';
     oneDriveError = e.message || String(e);
+    hasUnsyncedChanges = true;
+    registerOnlineRetry();
+    // Le réseau est indisponible dès l'ouverture de l'app : on charge quand même ce qui a pu
+    // être mis de côté localement lors d'une session précédente, plutôt que de laisser
+    // l'utilisateur repartir sur les données de démonstration de départ comme si de rien n'était.
+    const localBackup = loadLocalBackup();
+    if(localBackup){
+      applySnapshot(localBackup);
+      state.selectedCompanyId = computeStartingCompanyId();
+      toast('📦 Réseau indisponible — vos données enregistrées sur cet appareil ont été chargées. La synchronisation reprendra dès le retour du réseau.', 5000);
+    }
   }finally{
     render();
     // Ce qu'on vient de récupérer est déjà la version présente sur OneDrive — inutile de la
