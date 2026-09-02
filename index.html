@@ -7604,7 +7604,7 @@ function renderEntreprisesPage(){
       ${isFiltered ? `<button class="btn small" onclick="resetEntFilters()">Réinitialiser</button>` : ''}
     </div>
 
-    <div class="card" style="padding:0;overflow:auto;">
+    <div class="card" id="ent-table-scroll" data-preserve-scroll style="padding:0;overflow:auto;">
       <table class="ent-table">
         <thead>
           <tr>
@@ -7707,7 +7707,7 @@ function renderContactsPage(){
       ${isFiltered ? `<button class="btn small" onclick="resetCtFilters()">Réinitialiser</button>` : ''}
     </div>
 
-    <div class="card" style="padding:0;overflow:auto;">
+    <div class="card" id="ct-table-scroll" data-preserve-scroll style="padding:0;overflow:auto;">
       <table class="ent-table">
         <thead>
           <tr>
@@ -7831,7 +7831,7 @@ function renderOpportunitesPage(){
       ${isFiltered ? `<button class="btn small" onclick="resetOppFilters()">Réinitialiser</button>` : ''}
     </div>
 
-    <div class="card" style="padding:0;overflow:auto;">
+    <div class="card" id="opp-table-scroll" data-preserve-scroll style="padding:0;overflow:auto;">
       <table class="ent-table">
         <thead>
           <tr>
@@ -7963,7 +7963,7 @@ function renderTachesPage(){
       ${isFiltered ? `<button class="btn small" onclick="resetTacheFilters()">Réinitialiser</button>` : ''}
     </div>
 
-    <div class="card" style="padding:0;overflow:auto;">
+    <div class="card" id="tache-table-scroll" data-preserve-scroll style="padding:0;overflow:auto;">
       <table class="ent-table">
         <thead>
           <tr>
@@ -8063,7 +8063,7 @@ function renderNotesPage(){
       ${isFiltered ? `<button class="btn small" onclick="resetNoteFilters()">Réinitialiser</button>` : ''}
     </div>
 
-    <div class="card" style="padding:0;overflow:auto;">
+    <div class="card" id="note-table-scroll" data-preserve-scroll style="padding:0;overflow:auto;">
       <table class="ent-table">
         <thead>
           <tr>
@@ -8946,6 +8946,15 @@ function render(){
   const openOverlay = document.querySelector('.modal-overlay');
   const modalScrollTop = openOverlay ? openOverlay.scrollTop : null;
 
+  // Préserver le défilement horizontal des tableaux (Entreprises, Contacts, Opportunités,
+  // Tâches, Notes) : sans ça, trier sur une colonne peu visible (ex. Téléphone, Email) sur un
+  // écran étroit reconstruit le tableau et renvoie systématiquement tout à gauche, donnant
+  // l'impression que "ça revient au début" plutôt que d'avoir vraiment trié.
+  const scrollPreserved = {};
+  document.querySelectorAll('[data-preserve-scroll]').forEach(el => {
+    if(el.id) scrollPreserved[el.id] = {left: el.scrollLeft, top: el.scrollTop};
+  });
+
   let mainHtml = '';
   if(state.activeNav === 'entreprises'){
     if(state.entreprisesDetailCid && byId(DB.companies, state.entreprisesDetailCid)){
@@ -8993,6 +9002,11 @@ function render(){
     const newOverlay = document.querySelector('.modal-overlay');
     if(newOverlay) newOverlay.scrollTop = modalScrollTop;
   }
+
+  Object.keys(scrollPreserved).forEach(id => {
+    const el = document.getElementById(id);
+    if(el){ el.scrollLeft = scrollPreserved[id].left; el.scrollTop = scrollPreserved[id].top; }
+  });
 
   if(focusInfo){
     const el = document.querySelector(`[data-focus-key="${focusInfo.key}"]`);
