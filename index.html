@@ -698,7 +698,10 @@
    ========================================================================= */
 
 const todayD = new Date();
-const iso = d => d.toISOString().slice(0,10);
+// Important : jamais toISOString() ici — elle convertit systématiquement en UTC, ce qui décale
+// la date d'un jour en arrière entre minuit et 1h ou 2h du matin heure de Paris (selon l'heure
+// d'hiver/d'été), tant que l'heure UTC n'a pas elle-même basculé sur le nouveau jour.
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const addDays = n => { const d = new Date(todayD); d.setDate(d.getDate()+n); return iso(d); };
 const todayStr = iso(todayD);
 
