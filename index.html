@@ -409,6 +409,8 @@
   .doc-montant{font-family:'IBM Plex Mono';width:80px;flex:none;text-align:right;}
   .doc-statut{flex:1;min-width:0;}
   .doc-link{color:var(--teal);text-decoration:none;font-weight:600;}
+  .doc-link-missing{color:var(--ink-500);font-size:11.5px;font-style:italic;cursor:pointer;}
+  .doc-link-missing:hover{color:var(--brand-orange-dark);text-decoration:underline;}
   /* Container query plutôt que @media : cette carte peut devenir bien plus étroite qu'un
      téléphone dès que la fenêtre n'est pas maximisée (elle partage alors la moitié de l'écran
      avec la carte Notes) — un seuil basé sur la largeur de TOUTE LA FENÊTRE ne se déclencherait
@@ -420,7 +422,7 @@
     .doc-montant{width:auto;order:2;margin-left:auto;}
     .doc-outil{width:100%;order:3;font-size:11px;}
     .doc-statut{width:auto;order:4;}
-    .doc-link{order:5;margin-left:auto;}
+    .doc-link, .doc-link-missing{order:5;margin-left:auto;}
   }
 
   /* Notes */
@@ -7149,6 +7151,7 @@ function renderOpportunites(co, opps){
             <select class="status-select ${STATUS_CLASS[o.statut]}" onchange="changeOppStatus('${o.id}', this.value)">
               ${Object.entries(STATUS_LABELS).map(([k,v])=>`<option value="${k}" ${k===o.statut?'selected':''}>${v}</option>`).join('')}
             </select>
+            <button class="btn ghost small" title="Déplacer vers une autre entreprise" onclick="toggleMoveOpp('${o.id}')">↔️</button>
             <button class="btn ghost small" title="Modifier" onclick="toggleEditOpp('${o.id}')">✎</button>
           </div>
         </div>
@@ -7162,6 +7165,18 @@ function renderOpportunites(co, opps){
           <span class="opp-echeance">Échéance : ${fmtDate(o.echeance)}</span>
           <span class="opp-echeance">${(o.contacts||[]).map(kid=>{const k=byId(DB.contacts,kid); return k? esc(k.prenom):'';}).join(', ')}</span>
         </div>
+        ${movingOppId===o.id ? `
+        <div class="ct-move-box">
+          <div style="font-size:11.5px;color:var(--ink-500);margin-bottom:6px;">Déplacer « ${esc(o.intitule)} » vers :</div>
+          <select id="move-opp-target-${o.id}">
+            <option value="">— Choisir l'entreprise de destination —</option>
+            ${DB.companies.filter(c=>c.id!==co.id).slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(c=>`<option value="${c.id}">${esc(c.nom)}${c.ville?' — '+esc(c.ville):''}</option>`).join('')}
+          </select>
+          <div class="inline-form-actions" style="padding-top:8px;">
+            <button class="btn small" onclick="toggleMoveOpp(null)">Annuler</button>
+            <button class="btn small primary" onclick="moveOppToCompany('${o.id}')">Déplacer</button>
+          </div>
+        </div>` : ''}
       </div>`).join('') : `<div class="empty-queue">Aucune opportunité active pour ce compte.</div>`}
     ${closed>0 ? `<div style="font-size:11.5px;color:var(--ink-500);margin-top:8px;">${closed} opportunité(s) gagnée(s)/perdue(s) — <a href="#" onclick="setNav('opportunites');state.oppFilters.companyId='${co.id}';render();return false;" style="color:var(--brand-orange-dark);">voir dans l'onglet Opportunités</a></div>` : ''}
     ${renderInlineOppForm(co)}
@@ -7268,6 +7283,28 @@ function submitOpp(cid, oid){
   }
   render();
 }
+let movingOppId = null;
+function toggleMoveOpp(oid){
+  movingOppId = movingOppId === oid ? null : oid;
+  render();
+}
+function moveOppToCompany(oid){
+  const select = document.getElementById('move-opp-target-'+oid);
+  const targetId = select ? select.value : '';
+  if(!targetId){ toast('Choisissez d\'abord une entreprise de destination.'); return; }
+  const o = byId(DB.opportunities, oid);
+  const targetCo = byId(DB.companies, targetId);
+  if(!o || !targetCo) return;
+  o.companyId = targetId;
+  // Les contacts liés à l'opportunité appartenaient à l'ancienne entreprise — ils n'ont plus
+  // vraiment de sens une fois l'opportunité déplacée, donc on repart sur une liste vide plutôt
+  // que de laisser des références vers des contacts d'un autre compte.
+  o.contacts = [];
+  movingOppId = null;
+  toast(`« ${o.intitule} » déplacée vers ${targetCo.nom}.`);
+  render();
+  setTimeout(saveNow, 200);
+}
 function deleteOpp(oid){
   const o = byId(DB.opportunities, oid);
   if(!o) return;
@@ -7296,7 +7333,7 @@ function renderDocuments(co, docs){
         <span class="doc-outil">${esc(d.outil)}</span>
         <span class="doc-montant mono">${esc(d.montant)}</span>
         <span class="doc-statut">${esc(d.statut)}</span>
-        <button class="doc-link" style="background:none;border:none;cursor:pointer;padding:0;" onclick="toast('Lien vers ${esc(d.outil)} à connecter (devis ${esc(d.numero)})')">Ouvrir ↗</button>
+        ${d.lien && d.lien!=='#' ? `<a class="doc-link" href="${esc(d.lien)}" target="_blank" rel="noopener noreferrer">Ouvrir ↗</a>` : `<span class="doc-link-missing" onclick="toggleEditDoc('${d.id}')" title="Cliquer pour ajouter le lien du document">+ Ajouter le lien</span>`}
         <button class="btn ghost small" title="Modifier" onclick="toggleEditDoc('${d.id}')">✎</button>
       </div>`).join('') : `<div class="empty-queue">Aucun document lié.</div>`}
     ${renderInlineDocForm(co)}
@@ -7343,6 +7380,7 @@ function renderDocForm(co, doc){
       </select>
     </div>
     <input id="nd-date" type="date" value="${isEdit?doc.date:todayStr}" />
+    <input id="nd-lien" placeholder="Lien OneDrive du document (collé depuis OneDrive → Partager → Copier le lien)" value="${isEdit&&doc.lien&&doc.lien!=='#'?esc(doc.lien):''}" />
     <div class="inline-form-actions">
       ${isEdit ? `<button class="btn danger-ghost" onclick="deleteDoc('${doc.id}')" style="margin-right:auto;">Supprimer</button>` : ''}
       <button class="btn" onclick="${cancelFn}">Annuler</button>
@@ -7357,14 +7395,18 @@ function submitDoc(cid, docId){
   const outil = document.getElementById('nd-outil').value;
   const statut = document.getElementById('nd-statut').value;
   const date = document.getElementById('nd-date').value || todayStr;
+  let lien = document.getElementById('nd-lien').value.trim();
+  // Si un lien est collé sans "http(s)://" devant (cas fréquent en copiant-collant vite), on le
+  // complète automatiquement — sinon le lien s'ouvrirait comme une recherche au lieu du document.
+  if(lien && !/^https?:\/\//i.test(lien)) lien = 'https://' + lien;
   if(docId){
     const d = byId(DB.documents, docId);
-    Object.assign(d, {numero, montant, outil, statut, date});
+    Object.assign(d, {numero, montant, outil, statut, date, lien});
     editingDocId = null;
     toast('Document mis à jour.');
   } else {
     const id = 'd'+(DB.documents.length+1)+'-'+Math.random().toString(36).slice(2,5);
-    DB.documents.push({id, companyId:cid, opportunityId:null, numero, montant, statut, date, outil, lien:'#'});
+    DB.documents.push({id, companyId:cid, opportunityId:null, numero, montant, statut, date, outil, lien: lien || ''});
     addingDocFor = null;
     toast('Document ajouté.');
   }
