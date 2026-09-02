@@ -8979,6 +8979,11 @@ function stampUpdatedTimestamps(){
 
 function render(){
   stampUpdatedTimestamps();
+  scheduleLocalBackup(); // filet de sécurité local, avec un délai bien plus court que la
+                          // sauvegarde réseau — pour ne perdre une saisie que si l'appli est
+                          // fermée dans la fraction de seconde qui suit, pas dans les 2 secondes
+                          // qui suivent comme c'était le cas quand seule la tentative réseau
+                          // écrivait la sauvegarde locale.
   const results = searchResults(state.searchQuery);
   __searchActions = results.map(r=>r.action);
 
@@ -10027,6 +10032,23 @@ function saveLocalBackup(){
   try{ localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(buildSnapshot())); }
   catch(e){ console.warn('Sauvegarde locale de secours impossible (espace de stockage plein ?)', e); }
 }
+let __appInitialized = false; // devient vrai une fois qu'initOneDrive() a fini de vérifier s'il
+                               // existe une sauvegarde locale d'une session précédente à récupérer
+let __localBackupTimer = null;
+function scheduleLocalBackup(){
+  // Important : tant que l'app démarre à peine (avant qu'initOneDrive() ait eu la main pour
+  // vérifier une éventuelle sauvegarde existante), on n'écrit surtout rien — sinon les tout
+  // premiers rendus de la page fraîchement rechargée (données de démonstration de départ, pas
+  // encore récupérées) pourraient écraser une vraie sauvegarde faite lors d'une session
+  // précédente, avant même qu'elle ait pu être lue et restaurée.
+  if(!__appInitialized) return;
+  // Délai volontairement court (600 ms) et indépendant de la sauvegarde réseau (qui, elle,
+  // patiente 2 secondes et peut en plus échouer) — cette sauvegarde locale doit rester la plus à
+  // jour possible à tout moment, pour ne perdre au pire qu'une fraction de seconde de saisie si
+  // l'application est fermée juste après une modification.
+  clearTimeout(__localBackupTimer);
+  __localBackupTimer = setTimeout(saveLocalBackup, 600);
+}
 function loadLocalBackup(){
   try{
     const raw = localStorage.getItem(LOCAL_BACKUP_KEY);
@@ -10044,6 +10066,15 @@ function registerOnlineRetry(){
       saveToOneDrive();
     }
   });
+}
+
+// Ne reconstruit la page que si l'utilisateur n'est pas activement en train de saisir ou de
+// sélectionner quelque chose (menu déroulant ouvert compris) — sinon la reconstruction du DOM
+// referme brutalement ce menu ou fait disparaître le clavier, avant que la saisie soit terminée.
+function renderUnlessTyping(){
+  const active = document.activeElement;
+  const isTyping = active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName);
+  if(!isTyping) render();
 }
 
 let __saveInFlight = false;
@@ -10079,18 +10110,17 @@ async function saveToOneDrive(){
     oneDriveLastSync = new Date();
     hasUnsyncedChanges = false;
     if(before !== after){
-      // La fusion a intégré une modification faite ailleurs : on l'affiche tout de suite.
+      // La fusion a intégré une modification faite ailleurs : on l'affichera dès que possible,
+      // mais surtout jamais en interrompant une sélection ou une saisie en cours (même logique
+      // de protection que les deux autres branches ci-dessous) — les données fusionnées restent
+      // de toute façon bien en mémoire, elles s'afficheront simplement au tout prochain rendu.
       if(!DB.companies.find(c=>c.id===state.selectedCompanyId)){
         state.selectedCompanyId = computeStartingCompanyId();
       }
-      render();
+      renderUnlessTyping();
       toast('🔄 Synchronisé avec un autre appareil', 2200);
     } else {
-      // Même logique de protection que dans le bloc catch ci-dessous : on ne rafraîchit
-      // l'icône ☁️ que si l'utilisateur n'est pas activement en train de saisir quelque chose.
-      const active = document.activeElement;
-      const isTyping = active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName);
-      if(!isTyping) render();
+      renderUnlessTyping();
       toast('✓ Enregistré', 1400);
     }
   }catch(e){
@@ -10105,9 +10135,7 @@ async function saveToOneDrive(){
     // à chaque fois. toast() ci-dessus suffit à afficher le message sans reconstruire quoi que ce
     // soit ; on ne rafraîchit l'icône ☁️⚠️ que si l'utilisateur n'est pas activement en train de
     // saisir quelque chose (elle se mettra de toute façon à jour au tout prochain rendu normal).
-    const active = document.activeElement;
-    const isTyping = active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName);
-    if(!isTyping) render();
+    renderUnlessTyping();
   }
   __saveInFlight = false;
   if(__saveQueued){
@@ -10298,7 +10326,20 @@ async function initOneDrive(){
     const loaded = await loadMsalLibrary();
     if(!loaded || typeof msal === 'undefined'){
       oneDriveStatus = 'unavailable';
-      render();
+      hasUnsyncedChanges = true;
+      registerOnlineRetry();
+      // Absence totale de réseau, au point de ne même pas pouvoir charger la bibliothèque de
+      // connexion — exactement le cas où une sauvegarde locale d'une session précédente doit
+      // être récupérée avant toute chose. Sans cette étape ici (ce chemin ne passe ni par le
+      // bloc de récupération normal ci-dessous, ni par le "catch" global), l'app resterait sur
+      // ses données de démonstration de départ, que la sauvegarde locale rapide (voir
+      // scheduleLocalBackup) aurait alors fini par écraser la vraie sauvegarde avec.
+      const localBackup = loadLocalBackup();
+      if(localBackup){
+        applySnapshot(localBackup);
+        state.selectedCompanyId = computeStartingCompanyId();
+        toast('📦 Réseau indisponible — vos données enregistrées sur cet appareil ont été chargées. La synchronisation reprendra dès le retour du réseau.', 5000);
+      }
       return;
     }
     msalInstance = new msal.PublicClientApplication({
@@ -10364,6 +10405,8 @@ async function initOneDrive(){
       toast('📦 Réseau indisponible — vos données enregistrées sur cet appareil ont été chargées. La synchronisation reprendra dès le retour du réseau.', 5000);
     }
   }finally{
+    __appInitialized = true; // la vérification de récupération est terminée — la sauvegarde
+                              // locale rapide peut désormais reprendre normalement à chaque rendu
     render();
     // Ce qu'on vient de récupérer est déjà la version présente sur OneDrive — inutile de la
     // repousser aussitôt (voir la même remarque dans checkForRemoteUpdates).
