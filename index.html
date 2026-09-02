@@ -129,6 +129,32 @@
   .search-results .sr-tag{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-500);}
   .search-results .sr-empty{padding:14px;font-size:13px;color:var(--ink-500);}
 
+  /* ===== Suggestion d'adresse (fiche entreprise) ===== */
+  .addr-lookup{position:relative;}
+  .addr-lookup-status{font-size:11.5px;color:var(--ink-500);padding:4px 2px 0;}
+  .addr-lookup-status.error{color:var(--red);}
+  .addr-lookup-dropdown{
+    position:absolute;left:0;right:0;top:100%;margin-top:4px;z-index:5;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:0 8px 24px rgba(0,0,0,.18);max-height:320px;overflow:auto;padding:4px;
+  }
+  .addr-lookup-item{border-bottom:1px solid var(--line);}
+  .addr-lookup-item:last-child{border-bottom:none;}
+  .addr-lookup-row{
+    width:100%;text-align:left;background:none;border:none;cursor:pointer;font:inherit;
+    padding:8px 8px;border-radius:6px;display:flex;flex-direction:column;gap:1px;color:var(--ink-900);
+  }
+  .addr-lookup-row:hover{background:var(--panel-2);}
+  .addr-lookup-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;}
+  .addr-lookup-addr{font-size:12px;color:var(--ink-500);}
+  .addr-lookup-badge{
+    font-size:10px;font-weight:700;color:var(--teal-dark);background:var(--teal-wash);
+    border-radius:20px;padding:1px 7px;white-space:nowrap;
+  }
+  .addr-lookup-sub{padding-left:20px;}
+  .addr-lookup-sub .addr-lookup-name{font-size:12.5px;font-weight:500;}
+
+
   @media (max-width:700px){
     .topbar{flex-wrap:wrap;gap:8px;padding:8px 12px;}
     .nav{order:3;flex:1 1 100%;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:2px;}
@@ -5736,6 +5762,7 @@ function toast(msg, duration){
 
 function selectCompany(cid, taskId=null){
   if(state.selectedCompanyId !== cid) resetPendingNote();
+  resetAddrLookup();
   state.selectedCompanyId = cid;
   state.selectedTaskId = taskId;
   state.editingResume = false;
@@ -6088,6 +6115,131 @@ function syncAdresseFromParts(co){
   const parts = [co.rue, cpVille].filter(Boolean);
   if(parts.length) co.adresse = parts.join(', ');
 }
+
+/* ===== Suggestion d'adresse à partir de la raison sociale =====
+   Interroge l'API publique et gratuite « Recherche d'Entreprises » (recherche-entreprises.api.gouv.fr,
+   DINUM/Etalab, basée sur le répertoire Sirene) pour proposer les entreprises et leurs établissements
+   correspondant à ce qui est tapé, et pré-remplir rue/code postal/ville (+ activité si vide) en un clic.
+   Ne bloque jamais la saisie manuelle en cas d'absence de résultat ou d'erreur réseau. */
+let addrLookup = {target:null, query:'', results:[], loading:false, error:null};
+let addrLookupExpanded = null; // index de l'entreprise dont la liste des établissements est dépliée
+let __addrLookupTimer = null;
+let __addrLookupSeq = 0;
+
+function resetAddrLookup(){
+  addrLookup = {target:null, query:'', results:[], loading:false, error:null};
+  addrLookupExpanded = null;
+  clearTimeout(__addrLookupTimer);
+}
+
+function onAddrLookupInput(target, value){
+  addrLookup.target = target;
+  addrLookup.query = value;
+  addrLookup.error = null;
+  addrLookupExpanded = null;
+  clearTimeout(__addrLookupTimer);
+  const q = value.trim();
+  if(q.length < 2){ addrLookup.results = []; addrLookup.loading = false; render(); return; }
+  addrLookup.loading = true;
+  render();
+  __addrLookupTimer = setTimeout(() => runAddrLookup(target, q), 320);
+}
+
+async function runAddrLookup(target, q){
+  const seq = ++__addrLookupSeq;
+  try{
+    const res = await fetch(`https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(q)}&per_page=5`);
+    if(!res.ok) throw new Error('http '+res.status);
+    const data = await res.json();
+    if(seq !== __addrLookupSeq || addrLookup.target !== target) return; // réponse obsolète, on a changé de champ entre temps
+    addrLookup.results = (data.results || []).map(r => {
+      const brut = (r.matching_etablissements && r.matching_etablissements.length) ? r.matching_etablissements : (r.siege ? [r.siege] : []);
+      const etablissements = brut.map(e => {
+        const cp = e.code_postal || '';
+        const ville = e.libelle_commune || e.commune || '';
+        let rue = e.adresse || '';
+        const suffixe = [cp, ville].filter(Boolean).join(' ');
+        if(suffixe && rue.toUpperCase().endsWith(suffixe.toUpperCase())){
+          rue = rue.slice(0, rue.length - suffixe.length).trim().replace(/,+\s*$/, '');
+        }
+        return {siret: e.siret || null, siege: !!(e.est_siege ?? e.siege), rue, cp, ville};
+      }).filter(e => e.rue || e.ville);
+      return {
+        nom: r.nom_complet || r.nom_raison_sociale || q,
+        siren: r.siren || null,
+        naf: r.activite_principale || null,
+        etablissements,
+      };
+    }).filter(c => c.etablissements.length);
+    addrLookup.loading = false;
+    render();
+  }catch(err){
+    if(seq !== __addrLookupSeq) return;
+    addrLookup.loading = false;
+    addrLookup.error = "Recherche indisponible pour l'instant — poursuis en saisie manuelle.";
+    addrLookup.results = [];
+    render();
+  }
+}
+
+function toggleAddrLookupExpand(i){
+  addrLookupExpanded = addrLookupExpanded === i ? null : i;
+  render();
+}
+
+function applyAddrSuggestion(target, ci, ei){
+  const c = addrLookup.results[ci];
+  if(!c) return;
+  const e = c.etablissements[ei];
+  if(target === 'new'){
+    newCompanyForm.nom = c.nom;
+    newCompanyForm.rue = e.rue;
+    newCompanyForm.codePostal = e.cp;
+    newCompanyForm.ville = e.ville;
+    if(!newCompanyForm.activite && c.naf) newCompanyForm.activite = c.naf;
+  } else {
+    const co = byId(DB.companies, target);
+    if(co){
+      updateCompanyField(target, 'rue', e.rue);
+      updateCompanyField(target, 'codePostal', e.cp);
+      updateCompanyField(target, 'ville', e.ville);
+      if(!co.activite && c.naf) updateCompanyField(target, 'activite', c.naf);
+    }
+  }
+  toast('Adresse complétée : ' + [e.cp, e.ville].filter(Boolean).join(' ') + '.');
+  resetAddrLookup();
+  render();
+}
+
+function renderAddrLookupBox(target){
+  const active = addrLookup.target === target;
+  const fk = 'addr-lookup-' + target;
+  return `
+  <div class="field-row addr-lookup">
+    <label>🔎 Retrouver l'adresse (répertoire Sirene)</label>
+    <input type="text" placeholder="Retaper la raison sociale pour chercher…"
+           value="${active ? esc(addrLookup.query) : ''}"
+           oninput="onAddrLookupInput('${target}', this.value)" data-focus-key="${fk}">
+    ${active && addrLookup.loading ? `<div class="addr-lookup-status">Recherche…</div>` : ''}
+    ${active && addrLookup.error ? `<div class="addr-lookup-status error">${esc(addrLookup.error)}</div>` : ''}
+    ${active && !addrLookup.loading && !addrLookup.error && addrLookup.query.trim().length>=2 && addrLookup.results.length===0 ? `<div class="addr-lookup-status">Aucune correspondance dans le répertoire — poursuis en saisie manuelle.</div>` : ''}
+    ${active && addrLookup.results.length ? `
+    <div class="addr-lookup-dropdown">
+      ${addrLookup.results.map((c,ci) => `
+        <div class="addr-lookup-item">
+          <button type="button" class="addr-lookup-row" onclick="${c.etablissements.length>1 ? `toggleAddrLookupExpand(${ci})` : `applyAddrSuggestion('${target}', ${ci}, 0)`}">
+            <span class="addr-lookup-name">${esc(c.nom)}${c.etablissements.length>1 ? ` <span class="addr-lookup-badge">${c.etablissements.length} établissements</span>` : ''}</span>
+            <span class="addr-lookup-addr">${esc(c.etablissements[0].rue)}, ${esc(c.etablissements[0].cp)} ${esc(c.etablissements[0].ville)}</span>
+          </button>
+          ${c.etablissements.length>1 && addrLookupExpanded===ci ? c.etablissements.map((e,ei)=>`
+          <button type="button" class="addr-lookup-row addr-lookup-sub" onclick="applyAddrSuggestion('${target}', ${ci}, ${ei})">
+            <span class="addr-lookup-name">${e.siege ? 'Siège' : 'Établissement'}${e.siret ? ' · <span class=\"mono\">'+esc(e.siret)+'</span>' : ''}</span>
+            <span class="addr-lookup-addr">${esc(e.rue)}, ${esc(e.cp)} ${esc(e.ville)}</span>
+          </button>`).join('') : ''}
+        </div>`).join('')}
+    </div>` : ''}
+  </div>`;
+}
 function updatePrestataire(cid, value){
   const co = byId(DB.companies, cid);
   co.prestataire = value;
@@ -6135,6 +6287,7 @@ function toggleAddCompany(){
   addingCompanyOpen = !addingCompanyOpen;
   if(addingCompanyOpen) resetNewCompanyForm();
   if(!addingCompanyOpen) pendingScanPhotoForNewCompany = null;
+  resetAddrLookup();
   render();
 }
 function renderInlineCompanyForm(){
@@ -6146,6 +6299,7 @@ function renderInlineCompanyForm(){
     <h2>Nouvelle entreprise</h2>
     <div class="inline-form">
       <input id="nco-nom" placeholder="Raison sociale *" value="${esc(newCompanyForm.nom)}" oninput="newCompanyForm.nom=this.value">
+      ${renderAddrLookupBox('new')}
       <div class="grid2">
         <select id="nco-secteur" onchange="newCompanyForm.secteur=this.value">
           <option value="">Secteur…</option>
@@ -6798,6 +6952,7 @@ function renderEntreprise(co){
   <div class="card">
     <h2>Entreprise</h2>
     <div class="field-row"><label>Raison sociale</label><input value="${esc(co.nom)}" onblur="updateCompanyField('${co.id}','nom',this.value)"></div>
+    ${renderAddrLookupBox(co.id)}
     <div class="field-row"><label>Groupe (si multi-site)</label>
       <input type="text" value="${esc(co.groupe||'')}" placeholder="Nom du groupe — laisser vide si site unique" onblur="updateCompanyField('${co.id}','groupe',this.value)">
       ${groupesConnus.length ? `
@@ -7460,7 +7615,7 @@ function renderEntreprisesPage(){
             ${th('Taille','taille')}
             ${th('CA','ca')}
             ${th('Potentiel','potentiel')}
-            <th>Partenaire</th>
+            ${th('Partenaire','prestataire')}
             <th></th>
           </tr>
         </thead>
@@ -7517,6 +7672,7 @@ function filteredSortedContacts(){
     let va,vb;
     if(field==='entreprise'){ va=a._co?a._co.nom:''; vb=b._co?b._co.nom:''; }
     else if(field==='role'){ va=ROLE_LABELS[a.role]||''; vb=ROLE_LABELS[b.role]||''; }
+    else if(field==='tel'){ va=(a.tel&&a.tel!=='—')?a.tel:(a.mobile||''); vb=(b.tel&&b.tel!=='—')?b.tel:(b.mobile||''); }
     else { va=(a[field]||''); vb=(b[field]||''); }
     return String(va).localeCompare(String(vb))*mult;
   });
@@ -7559,8 +7715,8 @@ function renderContactsPage(){
             ${th('Fonction','fonction')}
             ${th('Entreprise','entreprise')}
             ${th('Rôle','role')}
-            <th>Téléphone</th>
-            <th>Email</th>
+            ${th('Téléphone','tel')}
+            ${th('Email','email')}
             <th></th>
           </tr>
         </thead>
@@ -7685,7 +7841,7 @@ function renderOpportunitesPage(){
             ${th('Statut','statut')}
             ${th('Potentiel','potentiel')}
             ${th('Échéance','echeance')}
-            <th>Dernière action</th>
+            ${th('Dernière action','derniereAction')}
             <th></th>
           </tr>
         </thead>
