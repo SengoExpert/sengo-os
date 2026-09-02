@@ -10086,8 +10086,11 @@ async function saveToOneDrive(){
       render();
       toast('🔄 Synchronisé avec un autre appareil', 2200);
     } else {
-      render(); // même sans fusion, on rafraîchit l'affichage — sinon l'icône ☁️⚠️ reste bloquée
-                // visuellement sur l'état "non synchronisé" même une fois la sauvegarde repassée
+      // Même logique de protection que dans le bloc catch ci-dessous : on ne rafraîchit
+      // l'icône ☁️ que si l'utilisateur n'est pas activement en train de saisir quelque chose.
+      const active = document.activeElement;
+      const isTyping = active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName);
+      if(!isTyping) render();
       toast('✓ Enregistré', 1400);
     }
   }catch(e){
@@ -10096,7 +10099,15 @@ async function saveToOneDrive(){
     hasUnsyncedChanges = true;
     registerOnlineRetry();
     toast('⚠️ Pas de réseau — vos données sont gardées en sécurité sur cet appareil, l\'enregistrement en ligne reprendra automatiquement dès que la connexion reviendra.', 4500);
-    render();
+    // Important : reconstruire toute la page ici (comme le fait render()) referme brutalement
+    // tout menu déroulant ouvert et fait disparaître le clavier d'une saisie en cours — un vrai
+    // problème hors-ligne, puisque CHAQUE sauvegarde automatique échoue alors et déclenchait ça
+    // à chaque fois. toast() ci-dessus suffit à afficher le message sans reconstruire quoi que ce
+    // soit ; on ne rafraîchit l'icône ☁️⚠️ que si l'utilisateur n'est pas activement en train de
+    // saisir quelque chose (elle se mettra de toute façon à jour au tout prochain rendu normal).
+    const active = document.activeElement;
+    const isTyping = active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName);
+    if(!isTyping) render();
   }
   __saveInFlight = false;
   if(__saveQueued){
