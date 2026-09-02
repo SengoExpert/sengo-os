@@ -106,7 +106,14 @@
   .onedrive-btn.connected{background:#fff;border-color:#fff;filter:none;}
   .onedrive-btn:disabled{opacity:.5;cursor:default;}
   .search-wrap{position:relative;flex:none;}
-  .search-wrap.expanded{width:190px;}
+  .search-wrap.expanded{
+    /* Superposition flottante, ancrée au bord droit de la barre — jamais dans le flux normal
+       de la barre du haut. Sans ça, la recherche déployée pouvait faire déborder/grandir toute
+       la barre (surtout sur un écran étroit), poussant vers le bas tout le contenu de la page
+       juste en l'ouvrant, avant même d'avoir tapé quoi que ce soit. */
+    position:absolute;top:50%;right:0;transform:translateY(-50%);
+    width:min(240px, calc(100vw - 24px));z-index:45;
+  }
   .search-icon-btn{
     background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:#fff;
     border-radius:7px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;
@@ -115,12 +122,13 @@
     position:absolute;left:0;top:0;background:none;border-color:transparent;width:30px;height:100%;
   }
   .search-wrap.expanded input{
-    width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+    width:100%;background:var(--brand-ink);border:1px solid rgba(255,255,255,.25);
     color:#fff;border-radius:7px;padding:7px 10px 7px 30px;font-size:16px;
+    box-shadow:0 8px 24px rgba(0,0,0,.25); /* la barre flotte au-dessus du reste, une légère ombre l'en détache visuellement */
   }
   .search-wrap input::placeholder{color:#8D958F;}
   .search-results{
-    position:absolute;top:36px;right:0;width:340px;max-width:calc(100vw - 24px);background:var(--panel);
+    position:absolute;top:36px;right:0;left:0;background:var(--panel);
     border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.18);
     padding:6px;color:var(--ink-900);max-height:400px;overflow:auto;
   }
@@ -160,7 +168,6 @@
     .nav{order:3;flex:1 1 100%;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:2px;}
     .nav button{padding:6px 9px;font-size:12px;white-space:nowrap;flex:none;}
     .onedrive-wrap{order:2;flex:none;}
-    .search-results{left:auto;right:0;width:calc(100vw - 24px);}
     /* Sous 16px, Safari iOS zoome automatiquement toute la page à la mise au point d'un
        champ — et ce zoom reste parfois bloqué après la saisie. On force donc 16px minimum
        sur tous les champs, quel que soit le composant, pour empêcher ce zoom involontaire. */
