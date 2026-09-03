@@ -9154,10 +9154,13 @@ function onOverlayPointerUp(e, closeFn){
    données chargées. */
 function computeStartingCompanyId(){
   const open = DB.tasks.filter(t=>t.statut==='ouverte' && matchesPrestataireFilter(byId(DB.companies, t.companyId)));
-  const late = open.filter(t=>t.echeance<todayStr).sort((a,b)=>a.echeance.localeCompare(b.echeance));
+  // Même ordre que celui affiché dans la file de travail (voir renderQueue) : Aujourd'hui en
+  // premier, puis le retard du plus proche au plus ancien, puis à venir — pour que l'entreprise
+  // ouverte au démarrage soit toujours exactement celle de la toute première action visible.
   const today = open.filter(t=>t.echeance===todayStr).sort((a,b)=> (a.priorite==='haute'?0:1) - (b.priorite==='haute'?0:1));
+  const late = open.filter(t=>t.echeance<todayStr).sort((a,b)=>b.echeance.localeCompare(a.echeance));
   const upcoming = open.filter(t=>t.echeance>todayStr).sort((a,b)=>a.echeance.localeCompare(b.echeance));
-  const topTask = late[0] || today[0] || upcoming[0];
+  const topTask = today[0] || late[0] || upcoming[0];
   if(topTask){
     state.selectedTaskId = topTask.id;
     return topTask.companyId;
