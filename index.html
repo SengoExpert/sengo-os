@@ -6795,7 +6795,9 @@ function renderTopbar(){
 
 function renderQueue(){
   const open = DB.tasks.filter(t=>t.statut==='ouverte' && matchesPrestataireFilter(byId(DB.companies, t.companyId)));
-  const late = open.filter(t=>t.echeance<todayStr).sort((a,b)=>a.echeance.localeCompare(b.echeance));
+  // De la plus proche à la plus éloignée : une échéance d'hier est plus urgente à rattraper
+  // qu'une échéance d'il y a un mois, donc elle doit apparaître en premier dans le retard.
+  const late = open.filter(t=>t.echeance<todayStr).sort((a,b)=>b.echeance.localeCompare(a.echeance));
   const today = open.filter(t=>t.echeance===todayStr).sort((a,b)=> (a.priorite==='haute'?0:1) - (b.priorite==='haute'?0:1));
   const upcoming = open.filter(t=>t.echeance>todayStr).sort((a,b)=>a.echeance.localeCompare(b.echeance));
 
@@ -6826,8 +6828,8 @@ function renderQueue(){
 
   return `
   <div class="queue">
-    ${group('En retard','late', late, 'late')}
     ${group("Aujourd'hui",'today', today, 'today')}
+    ${group('En retard','late', late, 'late')}
     ${group('À venir','upcoming', upcoming, 'upcoming')}
   </div>`;
 }
