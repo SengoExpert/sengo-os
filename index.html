@@ -699,13 +699,29 @@
    SENGO OS — V1 "Poste de pilotage" — données fictives, tout en mémoire.
    ========================================================================= */
 
-const todayD = new Date();
+let todayD = new Date();
 // Important : jamais toISOString() ici — elle convertit systématiquement en UTC, ce qui décale
 // la date d'un jour en arrière entre minuit et 1h ou 2h du matin heure de Paris (selon l'heure
 // d'hiver/d'été), tant que l'heure UTC n'a pas elle-même basculé sur le nouveau jour.
 const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const addDays = n => { const d = new Date(todayD); d.setDate(d.getDate()+n); return iso(d); };
-const todayStr = iso(todayD);
+let todayStr = iso(todayD);
+// "todayD"/"todayStr" ne se recalculent jamais tout seuls une fois l'app ouverte — sur un onglet
+// resté ouvert plusieurs jours (courant sur un ordinateur ou un téléphone), l'app continuait donc
+// de croire qu'on était encore le jour de l'ouverture, plusieurs jours après minuit : une tâche
+// reportée "à aujourd'hui" prenait alors cette date figée et périmée, pas la vraie date du jour.
+// On vérifie donc régulièrement si le calendrier a changé, et on rafraîchit tout si besoin.
+function refreshTodayIfDateChanged(){
+  const now = new Date();
+  const nowStr = iso(now);
+  if(nowStr !== todayStr){
+    todayD = now;
+    todayStr = nowStr;
+    render();
+  }
+}
+setInterval(refreshTodayIfDateChanged, 60000); // vérifié chaque minute — largement assez précis
+                                                // pour un changement de jour, sans rien alourdir
 
 function fmtDate(dstr){
   const d = new Date(dstr+'T00:00:00');
