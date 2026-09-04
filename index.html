@@ -404,6 +404,12 @@
 
   /* Documents */
   .doc-card-container{container-type:inline-size;}
+  .doc-drop-hint{
+    font-size:11.5px;color:var(--ink-500);text-align:center;padding:10px;margin-bottom:8px;
+    border:1.5px dashed var(--line);border-radius:8px;transition:.15s;
+  }
+  .doc-drop-hint.drag-active{border-color:var(--brand-orange);background:var(--brand-orange-wash);color:var(--brand-orange-dark);font-weight:600;}
+  .doc-drop-status{font-size:12px;color:var(--ink-500);padding:6px 2px;font-style:italic;}
   .doc-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:12.5px;flex-wrap:wrap;}
   .doc-row:last-child{border-bottom:none;}
   .doc-num{font-family:'IBM Plex Mono';font-weight:600;width:110px;flex:none;}
@@ -7372,8 +7378,10 @@ function performDeleteOpp(oid){
 
 function renderDocuments(co, docs){
   return `
-  <div class="card doc-card-container">
+  <div class="card doc-card-container" id="doc-dropzone-${co.id}" ondragover="handleDocDragOver(event)" ondragleave="handleDocDragLeave(event)" ondrop="handleDocDrop(event,'${co.id}')">
     <h2>Documents & devis <button class="btn ghost small" onclick="toggleAddDoc('${co.id}')">+ Ajouter</button></h2>
+    <div class="doc-drop-hint" id="doc-drop-hint-${co.id}">📎 Glissez un devis ici (PDF ou photo) pour pré-remplir automatiquement le numéro, le montant et la date</div>
+    ${docStatus[co.id] ? `<div class="doc-drop-status">⏳ ${esc(docStatus[co.id])}</div>` : ''}
     ${docs.length ? docs.map(d => editingDocId===d.id ? renderDocForm(co, d) : `
       <div class="doc-row">
         <span class="doc-num mono">${esc(d.numero)}</span>
@@ -7389,6 +7397,111 @@ function renderDocuments(co, docs){
 
 let addingDocFor = null;
 let editingDocId = null;
+/* ---------------------------- GLISSER-DÉPOSER D'UN DEVIS (extraction automatique) ----------------------------
+   Lit un PDF ou une photo de devis directement dans le navigateur (PDF via pdf.js, photo via
+   Tesseract.js — les deux déjà utilisés ailleurs dans l'app), puis tente d'en extraire le numéro,
+   le montant et la date pour pré-remplir le formulaire. Le fichier lui-même n'est jamais conservé
+   ni envoyé où que ce soit — seul le texte qui en est extrait sert, le temps de cette lecture.
+   L'utilisateur garde toujours la main pour vérifier/corriger avant d'enregistrer. */
+let docStatus = {}; // {companyId: "message affiché pendant la lecture"}
+function handleDocDragOver(e){
+  e.preventDefault();
+  const el = document.getElementById(e.currentTarget.id.replace('doc-dropzone-','doc-drop-hint-'));
+  if(el) el.classList.add('drag-active');
+}
+function handleDocDragLeave(e){
+  const el = document.getElementById(e.currentTarget.id.replace('doc-dropzone-','doc-drop-hint-'));
+  if(el) el.classList.remove('drag-active');
+}
+async function handleDocDrop(e, cid){
+  e.preventDefault();
+  const hint = document.getElementById('doc-drop-hint-'+cid);
+  if(hint) hint.classList.remove('drag-active');
+  const file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if(!file) return;
+  const isPdf = /\.pdf$/i.test(file.name) || file.type === 'application/pdf';
+  const isImage = file.type.startsWith('image/');
+  if(!isPdf && !isImage){
+    toast('Fichier non reconnu — déposez un PDF ou une photo du devis.');
+    return;
+  }
+  docStatus[cid] = 'Lecture du devis en cours…';
+  render();
+  try{
+    let text = '';
+    if(isPdf){
+      const loaded = await loadPdfLibrary();
+      if(!loaded) throw new Error('Lecture des PDF indisponible pour le moment.');
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+      // Les informations utiles (numéro, montant, date) figurent presque toujours sur la
+      // première page d'un devis — inutile de lire les pages suivantes (souvent le détail
+      // des lignes de produits), qui ralentiraient la lecture pour rien.
+      const page = await pdf.getPage(1);
+      const content = await page.getTextContent();
+      text = content.items.map(it=>it.str).join(' ');
+    } else {
+      const loaded = await loadOcrLibrary();
+      if(!loaded) throw new Error('Lecture des photos indisponible pour le moment.');
+      const result = await Tesseract.recognize(file, 'fra');
+      text = result.data.text;
+    }
+    const extracted = parseDevisText(text);
+    docStatus[cid] = null;
+    addingDocFor = cid;
+    editingDocId = null;
+    render();
+    // On pré-remplit APRÈS le rendu du formulaire, une fois les champs réellement présents dans
+    // la page — les valeurs restent bien modifiables, rien n'est enregistré tant que l'utilisateur
+    // n'a pas lui-même validé le formulaire.
+    if(extracted.numero){ const el = document.getElementById('nd-numero'); if(el) el.value = extracted.numero; }
+    if(extracted.montant){ const el = document.getElementById('nd-montant'); if(el) el.value = extracted.montant; }
+    if(extracted.date){ const el = document.getElementById('nd-date'); if(el) el.value = extracted.date; }
+    const found = [extracted.numero&&'numéro', extracted.montant&&'montant', extracted.date&&'date'].filter(Boolean);
+    toast(found.length ? `📎 Devis lu — ${found.join(', ')} pré-rempli(s), à vérifier avant d'enregistrer.` : '📎 Devis lu, mais aucune information n\'a pu en être extraite automatiquement — complétez le formulaire à la main.', 4500);
+  }catch(err){
+    console.error('Lecture du devis échouée', err);
+    docStatus[cid] = null;
+    toast('Lecture du devis impossible : ' + (err.message||err));
+    render();
+  }
+}
+function parseDevisText(text){
+  const flat = text.replace(/\s+/g,' ').trim();
+  const result = {numero:'', montant:'', date:''};
+
+  // Numéro : cherche après un mot-clé typique (devis, référence, n°...), sinon repli sur un code
+  // isolé qui ressemble à une référence (lettres + chiffres, avec ou sans tiret). On exige au
+  // moins un chiffre dans le résultat — sinon un mot ordinaire du texte ("devis reconnaissable"
+  // par exemple) pourrait être pris à tort pour une référence.
+  const numeroMatch = flat.match(/(?:devis|référence|réf\.?|facture)\s*n?°?\s*:?\s*([A-Z][A-Z0-9\-\/]{2,14})/i)
+    || flat.match(/\bn°\s*:?\s*([A-Z0-9][A-Z0-9\-\/]{2,14})/i);
+  if(numeroMatch && /\d/.test(numeroMatch[1])) result.numero = numeroMatch[1].toUpperCase();
+
+  // Montant : priorité au "TOTAL TTC" explicite (le seul vraiment fiable), sinon le plus grand
+  // montant en euros trouvé dans le document (généralement le total, plus élevé que les lignes
+  // de détail prises une par une).
+  const totalTtcMatch = flat.match(/total\s*ttc\s*:?\s*(\d[\d\s]{0,7}(?:[.,]\d{2})?)\s*€/i);
+  if(totalTtcMatch){
+    result.montant = totalTtcMatch[1].replace(/\s/g,'') + ' €';
+  } else {
+    const montants = [...flat.matchAll(/(\d[\d\s]{0,7}(?:[.,]\d{2}))\s*€/g)]
+      .map(m => ({raw: m[1].replace(/\s/g,'')+' €', value: parseFloat(m[1].replace(/\s/g,'').replace(',','.'))}));
+    if(montants.length){
+      result.montant = montants.reduce((max,m)=> m.value>max.value ? m : max).raw;
+    }
+  }
+
+  // Date : format JJ/MM/AAAA ou JJ-MM-AAAA, converti au format attendu par le champ date (ISO).
+  const dateMatch = flat.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/);
+  if(dateMatch){
+    const [, jj, mm, aaaa] = dateMatch;
+    result.date = `${aaaa}-${mm.padStart(2,'0')}-${jj.padStart(2,'0')}`;
+  }
+
+  return result;
+}
+
 function toggleAddDoc(cid){
   addingDocFor = addingDocFor === cid ? null : cid;
   editingDocId = null;
