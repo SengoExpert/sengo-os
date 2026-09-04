@@ -7471,11 +7471,15 @@ function parseDevisText(text){
   const result = {numero:'', montant:'', date:''};
 
   // Numéro : cherche après un mot-clé typique (devis, référence, n°...), sinon repli sur un code
-  // isolé qui ressemble à une référence (lettres + chiffres, avec ou sans tiret). On exige au
-  // moins un chiffre dans le résultat — sinon un mot ordinaire du texte ("devis reconnaissable"
-  // par exemple) pourrait être pris à tort pour une référence.
-  const numeroMatch = flat.match(/(?:devis|référence|réf\.?|facture)\s*n?°?\s*:?\s*([A-Z][A-Z0-9\-\/]{2,14})/i)
-    || flat.match(/\bn°\s*:?\s*([A-Z0-9][A-Z0-9\-\/]{2,14})/i);
+  // isolé qui ressemble à une référence (lettres + chiffres, avec ou sans tiret ou dièse). On
+  // exige au moins un chiffre dans le résultat — sinon un mot ordinaire du texte ("devis
+  // reconnaissable" par exemple) pourrait être pris à tort pour une référence.
+  // Le format "AR#04091" (Odoo notamment) est très distinctif — on le reconnaît en priorité,
+  // avant même de chercher un mot-clé "devis"/"référence" à proximité.
+  const hashMatch = flat.match(/\b([A-Z]{1,5}#\d{2,10})\b/);
+  const numeroMatch = hashMatch
+    || flat.match(/(?:devis|référence|réf\.?|facture)\s*n?°?\s*:?\s*([A-Z][A-Z0-9\-\/#]{2,14})/i)
+    || flat.match(/\bn°\s*:?\s*([A-Z0-9][A-Z0-9\-\/#]{2,14})/i);
   if(numeroMatch && /\d/.test(numeroMatch[1])) result.numero = numeroMatch[1].toUpperCase();
 
   // Montant : priorité au "TOTAL TTC" explicite (le seul vraiment fiable), sinon le plus grand
