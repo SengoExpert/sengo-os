@@ -5908,9 +5908,20 @@ function performDeleteTaskFromEdit(taskId){
   toast('Tâche supprimée.');
   render();
 }
+const FINISH_QUICK_DATES = [[1,'Demain'],[7,'Semaine prochaine'],[15,'Dans 15 jours'],[30,'Dans 1 mois']];
 function setPendingEcheance(v){
   state.pendingEcheance = v;
-  render();
+  // Important : PAS de render() complet ici. La fenêtre "Terminer l'action" contient deux zones
+  // de texte libre (résultat, prochaine action) qui ne sont pas reliées à une variable d'état —
+  // reconstruire toute la fenêtre les vidait donc entièrement à chaque clic sur une date rapide,
+  // effaçant ce que l'utilisateur venait de rédiger. On ne touche donc qu'aux boutons de date et
+  // au champ date lui-même.
+  document.querySelectorAll('.quick-dates button').forEach((btn, i) => {
+    const [n] = FINISH_QUICK_DATES[i];
+    if(n != null) btn.classList.toggle('active', state.pendingEcheance === addDays(n));
+  });
+  const dateInput = document.querySelector('.quick-dates input[type="date"]');
+  if(dateInput) dateInput.value = state.pendingEcheance;
 }
 function submitFinish(){
   const task = byId(DB.tasks, state.finishingTaskId);
@@ -9026,7 +9037,7 @@ function renderModal(){
   if(!state.showFinishModal) return '';
   const task = byId(DB.tasks, state.finishingTaskId);
   const co = byId(DB.companies, task.companyId);
-  const quick = [[1,'Demain'],[7,'Semaine prochaine'],[15,'Dans 15 jours'],[30,'Dans 1 mois']];
+  const quick = FINISH_QUICK_DATES;
   return `
   <div class="modal-overlay" onpointerdown="onOverlayPointerDown(event)" onpointerup="onOverlayPointerUp(event, closeFinish)">
     <div class="modal">
