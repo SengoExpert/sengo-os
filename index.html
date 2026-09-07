@@ -5953,7 +5953,7 @@ function submitFinish(){
 
   // Ajoute aussi une note automatique pour tracer l'échange dans l'historique
   DB.notes.push({
-    id:'n'+(DB.notes.length+1), companyId:task.companyId, contactId:task.contactId,
+    id: gen_id_client('n'), companyId:task.companyId, contactId:task.contactId,
     opportunityId:task.opportunityId, date: todayStr, texte: resultat || task.titre
   });
 
@@ -6033,7 +6033,7 @@ function addNote(cid){
   const val = pendingNote.text.trim();
   if(!val && !pendingNote.photos.length){ toast('Écrivez un texte ou ajoutez au moins une photo.'); return false; }
   DB.notes.push({
-    id:'n'+(DB.notes.length+1), companyId:cid, contactId:null, opportunityId:null,
+    id: gen_id_client('n'), companyId:cid, contactId:null, opportunityId:null,
     date: todayStr, texte: val, type: pendingNote.type, photos: pendingNote.photos
   });
   resetPendingNote();
@@ -8541,7 +8541,7 @@ function createTourFromProposal(){
   const prop = state.tourProposal;
   if(!prop) return;
   const date = state.tourDate;
-  const tid = 'tour'+(DB.tournees.length+1);
+  const tid = gen_id_client('tour');
   const taskIds = [];
   prop.order.forEach((c,i)=>{
     const taskId = 'tt'+(DB.tasks.length+1)+'-'+Math.random().toString(36).slice(2,5);
