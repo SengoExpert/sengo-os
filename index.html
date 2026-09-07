@@ -6705,12 +6705,11 @@ function renderSearchResultsOnly(){
   if(!wrap) return;
   const existing = wrap.querySelector('.search-results');
   const results = searchResults(state.searchQuery);
-  __searchActions = results.map(r=>r.action);
   if(state.searchQuery.length > 1){
     const html = `
       <div class="search-results">
-        ${results.length ? results.map((r,i)=>`
-          <div class="sr-item" onclick='runSearchAction(${i})'>
+        ${results.length ? results.map(r=>`
+          <div class="sr-item" onclick="runSearchAction('${r.companyId}')">
             <span>${esc(r.label)}</span><span class="sr-tag">${r.tag}</span>
           </div>`).join('') : `<div class="sr-empty">Aucun résultat pour « ${esc(state.searchQuery)} »</div>`}
       </div>`;
@@ -6742,35 +6741,34 @@ function closeSearchResultsSoon(){
     }
   }, 200);
 }
-function runSearchAction(i){
+function runSearchAction(companyId){
   state.searchQuery = ''; // referme le menu de résultats une fois la sélection faite
-  const action = __searchActions[i];
-  if(action) action();
+  if(companyId) selectCompany(companyId);
 }
 function searchResults(q){
   if(!q || q.length<2) return [];
   const Q = q.toLowerCase();
   const res = [];
   DB.companies.forEach(c=>{
-    if(c.nom.toLowerCase().includes(Q)) res.push({label:c.nom, tag:'Entreprise', action:()=>selectCompany(c.id)});
+    if(c.nom.toLowerCase().includes(Q)) res.push({label:c.nom, tag:'Entreprise', companyId:c.id});
   });
   DB.contacts.forEach(k=>{
     const full = (k.prenom+' '+k.nom).toLowerCase();
     if(full.includes(Q)){
       const co = byId(DB.companies, k.companyId);
-      res.push({label:`${k.prenom} ${k.nom} — ${co?co.nom:''}`, tag:'Contact', action:()=>selectCompany(k.companyId)});
+      res.push({label:`${k.prenom} ${k.nom} — ${co?co.nom:''}`, tag:'Contact', companyId:k.companyId});
     }
   });
   DB.opportunities.forEach(o=>{
     if(o.intitule.toLowerCase().includes(Q)){
       const co = byId(DB.companies, o.companyId);
-      res.push({label:`${o.intitule} — ${co?co.nom:''}`, tag:'Opportunité', action:()=>selectCompany(o.companyId)});
+      res.push({label:`${o.intitule} — ${co?co.nom:''}`, tag:'Opportunité', companyId:o.companyId});
     }
   });
   DB.notes.forEach(n=>{
     if(n.texte.toLowerCase().includes(Q)){
       const co = byId(DB.companies, n.companyId);
-      res.push({label:`« …${n.texte.slice(0,60)}… » — ${co?co.nom:''}`, tag:'Note', action:()=>selectCompany(n.companyId)});
+      res.push({label:`« …${n.texte.slice(0,60)}… » — ${co?co.nom:''}`, tag:'Note', companyId:n.companyId});
     }
   });
   return res.slice(0,10);
@@ -6831,8 +6829,8 @@ function renderTopbar(){
         oninput="runSearch(this.value)" onblur="closeSearchResultsSoon()" data-focus-key="topbar-search" />
       ${state.searchQuery.length>1 ? `
       <div class="search-results">
-        ${results.length ? results.map((r,i)=>`
-          <div class="sr-item" onclick='runSearchAction(${i})'>
+        ${results.length ? results.map(r=>`
+          <div class="sr-item" onclick="runSearchAction('${r.companyId}')">
             <span>${esc(r.label)}</span><span class="sr-tag">${r.tag}</span>
           </div>`).join('') : `<div class="sr-empty">Aucun résultat pour « ${esc(state.searchQuery)} »</div>`}
       </div>` : ''}
@@ -9110,7 +9108,6 @@ function postponeTaskCustom(taskId, dateStr){
 }
 
 /* ---------------------------- MAIN RENDER ---------------------------- */
-let __searchActions = [];
 let __lastRenderContext = null;
 /* ---------------------------- HORODATAGE AUTOMATIQUE DES MODIFICATIONS ----------------------------
    Plutôt que d'ajouter manuellement "ce champ vient d'être modifié" à chaque endroit du code (des
@@ -9169,8 +9166,6 @@ function render(){
                           // fermée dans la fraction de seconde qui suit, pas dans les 2 secondes
                           // qui suivent comme c'était le cas quand seule la tentative réseau
                           // écrivait la sauvegarde locale.
-  const results = searchResults(state.searchQuery);
-  __searchActions = results.map(r=>r.action);
 
   // Préserver la position de défilement de la page : sans ça, toute modification (changer un
   // menu déroulant, cocher une case…) reconstruit le DOM et renvoie l'écran tout en haut de la
