@@ -6023,10 +6023,11 @@ function closePhotoGallery(){
 }
 let editingPhotoTitleId = null;
 function saveNotePhotoTitle(photoId, value){
+  if(__inRenderCycle) return; // même protection que updateCompanyField, voir son commentaire
   const p = findNotePhoto(photoId);
   if(p) p.titre = value.trim();
   editingPhotoTitleId = null;
-  render();
+  setTimeout(render, 0);
 }
 function addNote(cid){
   const val = pendingNote.text.trim();
@@ -6157,11 +6158,25 @@ function saveResume(cid){
   render();
 }
 
+let __inRenderCycle = false;
 function updateCompanyField(cid, field, value){
+  if(__inRenderCycle) return; // blur "fantôme" causé par la suppression du champ pendant la
+                              // reconstruction du DOM (voir render) — pas une vraie action de
+                              // l'utilisateur, qui créerait sinon une reconstruction sans fin.
   const co = byId(DB.companies, cid);
   co[field] = value;
   if(field==='rue' || field==='codePostal' || field==='ville') syncAdresseFromParts(co);
-  render(); // sans ça, ce champ ne serait jamais horodaté ni couvert par le filet de sécurité de sauvegarde
+  // Rendu différé d'un instant (setTimeout 0), plutôt qu'immédiat : au moment précis où ce champ
+  // perd le focus (parce qu'on vient de cliquer sur un autre champ juste à côté), le focus passe
+  // brièvement par un état transitoire (ni l'ancien ni le nouveau champ, souvent <body>) avant de
+  // se stabiliser sur sa vraie destination. Reconstruire la page à cet instant précis ne permet
+  // donc jamais de deviner correctement quel champ protéger — le nouveau champ se retrouvait
+  // reconstruit avec son ancienne valeur, sur laquelle la frappe suivante venait alors s'insérer
+  // au lieu de la remplacer (ex. "VALENCE" tapé devenait "VALENCECourthézon"). En différant très
+  // légèrement, le focus a le temps de se stabiliser, et le mécanisme de préservation peut alors
+  // correctement identifier et protéger le bon champ, y compris ce qui y est déjà en cours de
+  // frappe.
+  setTimeout(render, 0);
 }
 function syncAdresseFromParts(co){
   const cpVille = [co.codePostal, co.ville].filter(Boolean).join(' ');
@@ -9167,12 +9182,24 @@ function render(){
   const savedScrollY = contextChanged ? 0 : window.scrollY;
   __lastRenderContext = currentContext;
 
-  // Préserver le focus + la position du curseur d'un champ texte à travers le re-rendu,
-  // sinon innerHTML recrée le DOM et le focus saute après chaque frappe.
+  // Préserver le focus + la position du curseur + la valeur EN COURS DE FRAPPE d'un champ texte
+  // à travers le re-rendu — sinon innerHTML recrée le DOM et efface tout, y compris ce qui vient
+  // d'être tapé mais pas encore validé (le champ n'a pas encore perdu le focus, donc sa saisie
+  // n'est pas encore enregistrée dans les données : reconstruire le DOM à ce moment précis la
+  // fait disparaître purement et simplement). La plupart des champs (rue, téléphone...) n'ont pas
+  // de data-focus-key dédié — on se rabat alors sur leur onblur/onchange, déjà unique par
+  // construction (il encode l'identifiant de la fiche et le nom du champ), sans avoir à ajouter
+  // cet attribut sur des dizaines de champs un par un.
   const active = document.activeElement;
   let focusInfo = null;
-  if(active && active.dataset && active.dataset.focusKey){
-    focusInfo = {key: active.dataset.focusKey, start: active.selectionStart, end: active.selectionEnd};
+  if(active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA' || active.tagName==='SELECT')){
+    const key = (active.dataset && active.dataset.focusKey) || active.getAttribute('onblur') || active.getAttribute('onchange');
+    if(key){
+      focusInfo = {
+        key, usesDataAttr: !!(active.dataset && active.dataset.focusKey),
+        start: active.selectionStart, end: active.selectionEnd, value: active.value,
+      };
+    }
   }
 
   // Préserver la position de défilement d'une fenêtre modale ouverte, sinon chaque
@@ -9225,6 +9252,11 @@ function render(){
       <div class="layout mobile-show-${state.mobileView}">${renderQueue()}${renderCockpit()}</div>`;
   }
 
+  __inRenderCycle = true; // voir updateCompanyField : la ligne suivante (innerHTML) déclenche un
+                          // blur "fantôme" sur l'élément actuellement focalisé (puisqu'elle le
+                          // supprime du DOM) — ce drapeau permet de reconnaître cet évènement
+                          // artificiel et de l'ignorer, plutôt que de le traiter comme une vraie
+                          // action de saisie de l'utilisateur.
   document.getElementById('app').innerHTML = `
     ${renderTopbar()}
     ${mainHtml}
@@ -9232,6 +9264,7 @@ function render(){
     ${oneNoteReviewOpen ? renderOneNoteReview() : ''}
     ${mailingListOpen ? renderMailingModal() : ''}
   `;
+  __inRenderCycle = false;
 
   if(modalScrollTop != null){
     const newOverlay = document.querySelector('.modal-overlay');
@@ -9244,8 +9277,20 @@ function render(){
   });
 
   if(focusInfo){
-    const el = document.querySelector(`[data-focus-key="${focusInfo.key}"]`);
+    let el = focusInfo.usesDataAttr ? document.querySelector(`[data-focus-key="${focusInfo.key}"]`) : null;
+    if(!el){
+      // Repli : on recherche parmi les champs celui qui porte exactement le même onblur/onchange
+      // qu'avant le rendu (une recherche CSS directe par attribut serait risquée ici, ces valeurs
+      // contenant des apostrophes qui casseraient le sélecteur).
+      const candidates = document.querySelectorAll('input, textarea, select');
+      for(const c of candidates){
+        if(c.getAttribute('onblur') === focusInfo.key || c.getAttribute('onchange') === focusInfo.key){ el = c; break; }
+      }
+    }
     if(el){
+      // Réapplique ce qui était en train d'être tapé — sans ça, un champ reconstruit avec
+      // l'ancienne valeur "officielle" effacerait une saisie pas encore validée par un blur.
+      if(typeof focusInfo.value === 'string' && el.value !== focusInfo.value) el.value = focusInfo.value;
       el.focus();
       if(typeof focusInfo.start === 'number' && el.setSelectionRange){
         try{ el.setSelectionRange(focusInfo.start, focusInfo.end); }catch(e){}
