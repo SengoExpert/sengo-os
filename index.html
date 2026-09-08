@@ -250,6 +250,8 @@
   .task-card.late{border-left-color:var(--red);}
   .task-card.today{border-left-color:var(--amber);}
   .task-card.upcoming{border-left-color:var(--blue);}
+  .task-card.is-rdv{border-left-color:var(--purple, #6247AA);}
+  .task-card.is-rdv .tc-date{font-weight:700;color:var(--purple, #6247AA);}
   .task-card .tc-top{display:flex;justify-content:space-between;align-items:baseline;gap:6px;}
   .task-card .tc-company{font-weight:600;font-size:12.5px;letter-spacing:.01em;}
   .task-card .tc-date{font-family:'IBM Plex Mono';font-size:10.5px;color:var(--ink-500);white-space:nowrap;}
@@ -259,6 +261,17 @@
   .pill.opp{background:var(--teal-wash);color:var(--teal-dark);}
   .pill.contact{background:var(--panel-2);color:var(--ink-500);}
   .empty-queue{font-size:12px;color:var(--ink-500);padding:10px 4px;font-style:italic;}
+  .agenda-group{margin-top:14px;}
+  .agenda-group h3{font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-500);display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+  .agenda-group .count{background:var(--panel-2);border-radius:20px;padding:1px 8px;font-size:11px;}
+  .rdv-row{display:flex;align-items:center;gap:14px;padding:10px 8px;border-bottom:1px solid var(--line);cursor:pointer;}
+  .rdv-row:hover{background:var(--panel-2);}
+  .rdv-when{flex:none;width:70px;text-align:center;}
+  .rdv-heure{font-family:'IBM Plex Mono';font-weight:700;font-size:15px;color:#6247AA;}
+  .rdv-date{font-size:10.5px;color:var(--ink-500);}
+  .rdv-body{flex:1;min-width:0;}
+  .rdv-company{font-weight:600;font-size:13px;}
+  .rdv-title{font-size:12.5px;color:var(--ink-700);}
 
   /* ===== Cockpit (right) ===== */
   .cockpit{display:flex;flex-direction:column;gap:14px;min-width:0;}
@@ -6679,12 +6692,13 @@ function toggleAddTask(cid){
 function submitTask(cid){
   const titre = document.getElementById('nt-titre').value.trim();
   const echeance = document.getElementById('nt-echeance').value || todayStr;
+  const heure = document.getElementById('nt-heure').value || '';
   const priorite = document.getElementById('nt-priorite').value;
   if(!titre){ toast('Le titre de la tâche est requis.'); return; }
-  const id = 't'+(DB.tasks.length+1)+'-'+Math.random().toString(36).slice(2,5);
-  DB.tasks.push({id, companyId:cid, contactId:null, opportunityId:null, titre, echeance, priorite, statut:'ouverte'});
+  const id = gen_id_client('t');
+  DB.tasks.push({id, companyId:cid, contactId:null, opportunityId:null, titre, echeance, heure, priorite, statut:'ouverte'});
   addingTaskFor = null;
-  toast('Tâche créée.');
+  toast(heure ? 'Rendez-vous créé.' : 'Tâche créée.');
   render();
 }
 
@@ -6791,6 +6805,7 @@ function renderTopbar(){
       <button class="${state.activeNav==='contacts'?'active':''}" onclick="setNav('contacts')">Contacts</button>
       <button class="${state.activeNav==='opportunites'?'active':''}" onclick="setNav('opportunites')">Opportunités</button>
       <button class="${state.activeNav==='taches'?'active':''}" onclick="setNav('taches')">Tâches</button>
+      <button class="${state.activeNav==='agenda'?'active':''}" onclick="setNav('agenda')">📅 Agenda</button>
       <button class="${state.activeNav==='notes'?'active':''}" onclick="setNav('notes')">Notes</button>
       <button class="disabled" title="À venir">Documents</button>
       <button class="${state.activeNav==='carte'?'active':''}" onclick="setNav('carte')">Carte</button>
@@ -6841,7 +6856,14 @@ function renderQueue(){
   // De la plus proche à la plus éloignée : une échéance d'hier est plus urgente à rattraper
   // qu'une échéance d'il y a un mois, donc elle doit apparaître en premier dans le retard.
   const late = open.filter(t=>t.echeance<todayStr).sort((a,b)=>b.echeance.localeCompare(a.echeance));
-  const today = open.filter(t=>t.echeance===todayStr).sort((a,b)=> (a.priorite==='haute'?0:1) - (b.priorite==='haute'?0:1));
+  const today = open.filter(t=>t.echeance===todayStr).sort((a,b)=> {
+    // Un rendez-vous avec une heure précise passe avant une tâche sans heure, et entre deux
+    // rendez-vous, le plus proche dans la journée passe en premier.
+    if(a.heure && b.heure) return a.heure.localeCompare(b.heure);
+    if(a.heure && !b.heure) return -1;
+    if(!a.heure && b.heure) return 1;
+    return (a.priorite==='haute'?0:1) - (b.priorite==='haute'?0:1);
+  });
   const upcoming = open.filter(t=>t.echeance>todayStr).sort((a,b)=>a.echeance.localeCompare(b.echeance));
 
   const card = (t, kind) => {
@@ -6850,10 +6872,10 @@ function renderQueue(){
     const opp = t.opportunityId ? byId(DB.opportunities, t.opportunityId) : null;
     const sel = state.selectedTaskId === t.id ? 'selected' : '';
     return `
-    <div class="task-card ${kind} ${sel}" onclick="selectCompany('${co.id}','${t.id}')">
+    <div class="task-card ${kind} ${t.heure?'is-rdv':''} ${sel}" onclick="selectCompany('${co.id}','${t.id}')">
       <div class="tc-top">
         <div class="tc-company"><span class="sector-dot" style="background:${PRESTATAIRE_COLORS[co.prestataire]}" title="${co.prestataire}"></span>${esc(co.nom)}</div>
-        <div class="tc-date">${relLabel(t.echeance)}</div>
+        <div class="tc-date">${t.heure ? `🕐 ${esc(t.heure)}` : relLabel(t.echeance)}</div>
       </div>
       <div class="tc-title">${esc(t.titre)}</div>
       <div class="tc-meta">
@@ -6975,11 +6997,14 @@ function renderInlineTaskForm(cid){
       <input id="nt-titre" placeholder="Intitulé de la tâche" />
       <input id="nt-echeance" type="date" value="${todayStr}" />
     </div>
-    <select id="nt-priorite">
-      <option value="haute">Priorité haute</option>
-      <option value="moyenne" selected>Priorité moyenne</option>
-      <option value="basse">Priorité basse</option>
-    </select>
+    <div class="grid2">
+      <input id="nt-heure" type="time" placeholder="Heure (rendez-vous)" />
+      <select id="nt-priorite">
+        <option value="haute">Priorité haute</option>
+        <option value="moyenne" selected>Priorité moyenne</option>
+        <option value="basse">Priorité basse</option>
+      </select>
+    </div>
     <div class="inline-form-actions">
       <button class="btn" onclick="toggleAddTask('${cid}')">Annuler</button>
       <button class="btn primary" onclick="submitTask('${cid}')">Créer la tâche</button>
@@ -8236,6 +8261,246 @@ function renderTachesPage(){
 }
 
 /* ======================================================================
+   PAGE AGENDA — rendez-vous (tâches avec une heure précise), tous comptes
+   ====================================================================== */
+let addingRdvOpen = false;
+function toggleAddRdv(){
+  addingRdvOpen = !addingRdvOpen;
+  render();
+}
+function submitRdv(){
+  const cid = document.getElementById('rdv-entreprise').value;
+  const titre = document.getElementById('rdv-titre').value.trim();
+  const echeance = document.getElementById('rdv-date').value || todayStr;
+  const heure = document.getElementById('rdv-heure').value;
+  if(!cid){ toast('Choisissez d\'abord l\'entreprise concernée.'); return; }
+  if(!titre){ toast('L\'intitulé du rendez-vous est requis.'); return; }
+  if(!heure){ toast('L\'heure du rendez-vous est requise.'); return; }
+  DB.tasks.push({id: gen_id_client('t'), companyId:cid, contactId:null, opportunityId:null, titre, echeance, heure, priorite:'haute', statut:'ouverte'});
+  addingRdvOpen = false;
+  toast('Rendez-vous ajouté à l\'agenda.');
+  render();
+}
+
+/* ---------------------------- IMPORT .ICS (export Calendrier Mac ou autre agenda) ----------------------------
+   Fichier texte standard (RFC 5545), lu entièrement dans le navigateur — rien n'est envoyé
+   nulle part. Chaque évènement devient un rendez-vous candidat, que l'utilisateur rattache
+   ensuite à la bonne entreprise avant validation (sur le même principe que l'import OneNote). */
+function triggerImportIcs(){
+  const input = document.getElementById('import-ics-input');
+  if(input) input.click();
+}
+function parseIcsDateTime(val){
+  // Formats rencontrés : 20260910T140000Z (UTC) / 20260910T140000 (heure locale "flottante",
+  // le cas le plus courant à l'export) / 20260910 (évènement toute la journée, sans heure).
+  const m = val.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?/);
+  if(!m) return null;
+  const [, yyyy, mm, dd, hh, min, , isUtc] = m;
+  if(!hh) return { date: `${yyyy}-${mm}-${dd}`, heure: '' }; // toute la journée, pas d'heure précise
+  if(isUtc){
+    // Convertit vers l'heure locale du navigateur (celle de l'utilisateur, en France) plutôt que
+    // de garder l'heure UTC telle quelle, qui serait décalée d'1 ou 2h selon la saison.
+    const d = new Date(Date.UTC(+yyyy, +mm-1, +dd, +hh, +min));
+    return { date: iso(d), heure: `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` };
+  }
+  return { date: `${yyyy}-${mm}-${dd}`, heure: `${hh}:${min}` };
+}
+function parseIcs(text){
+  // Une ligne "repliée" (suite d'une ligne précédente) commence par une espace ou une tabulation
+  // — il faut la recoller à la ligne précédente avant toute analyse, sinon le contenu se retrouve
+  // scindé n'importe où.
+  const unfolded = text.replace(/\r\n[ \t]/g, '').replace(/\n[ \t]/g, '');
+  const lines = unfolded.split(/\r\n|\n|\r/);
+  const events = [];
+  let current = null;
+  lines.forEach(line => {
+    if(/^BEGIN:VEVENT/i.test(line)){ current = {summary:'', date:'', heure:''}; }
+    else if(/^END:VEVENT/i.test(line)){ if(current && current.summary && current.date) events.push(current); current = null; }
+    else if(current){
+      const idx = line.indexOf(':');
+      if(idx<0) return;
+      const key = line.slice(0, idx).toUpperCase();
+      const val = line.slice(idx+1);
+      if(key === 'SUMMARY'){
+        current.summary = val.replace(/\\,/g,',').replace(/\\;/g,';').replace(/\\n/gi,' ').trim();
+      } else if(key.startsWith('DTSTART')){
+        const parsed = parseIcsDateTime(val.trim());
+        if(parsed){ current.date = parsed.date; current.heure = parsed.heure; }
+      }
+    }
+  });
+  return events;
+}
+
+let icsCandidates = [];
+let icsReviewOpen = false;
+async function importIcsFile(input){
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+  try{
+    const text = await file.text();
+    const events = parseIcs(text);
+    if(!events.length){
+      toast('Aucun évènement trouvé dans ce fichier .ics.');
+      return;
+    }
+    // Seuls les évènements à venir ou récents ont un intérêt à devenir des tâches — on écarte
+    // le passé lointain (souvent des évènements très anciens conservés dans un vieil agenda).
+    const cutoff = addDays(-30);
+    const relevant = events.filter(e => e.date >= cutoff).slice(0, 200);
+    const companyByKey = new Map();
+    DB.companies.forEach(co => { const k = normKeyLoose(co.nom); if(k) companyByKey.set(k, co); });
+    icsCandidates = relevant.map((e,i) => {
+      const titleKey = normKeyLoose(e.summary);
+      let matched = null;
+      if(titleKey){
+        for(const [key, co] of companyByKey){
+          if(titleKey.includes(key) || key.includes(titleKey)){ matched = co; break; }
+        }
+      }
+      return { id:'icsc'+i, summary:e.summary, date:e.date, heure:e.heure, companyId: matched?matched.id:'', include:true };
+    });
+    icsReviewOpen = true;
+    render();
+  }catch(err){
+    console.error('Lecture du fichier .ics échouée', err);
+    toast('Fichier .ics illisible ou invalide.');
+  }
+}
+function closeIcsReview(){
+  icsReviewOpen = false;
+  icsCandidates = [];
+  render();
+}
+function toggleIcsCandidateInclude(id){
+  const c = icsCandidates.find(x=>x.id===id);
+  if(c) c.include = !c.include;
+  render();
+}
+function setIcsCandidateCompany(id, companyId){
+  const c = icsCandidates.find(x=>x.id===id);
+  if(c) c.companyId = companyId;
+}
+function confirmIcsImport(){
+  const toImport = icsCandidates.filter(c => c.include && c.companyId);
+  if(!toImport.length){
+    toast('Sélectionnez au moins un rendez-vous avec une entreprise assignée.');
+    return;
+  }
+  toImport.forEach(c => {
+    DB.tasks.push({
+      id: gen_id_client('t'), companyId:c.companyId, contactId:null, opportunityId:null,
+      titre:c.summary, echeance:c.date, heure:c.heure||'', priorite: c.heure?'haute':'moyenne', statut:'ouverte',
+    });
+  });
+  const skipped = icsCandidates.length - toImport.length;
+  toast(`${toImport.length} rendez-vous importé(s)${skipped?`, ${skipped} ignoré(s)`:''}.`, 4000);
+  icsReviewOpen = false;
+  icsCandidates = [];
+  render();
+  setTimeout(saveNow, 200);
+}
+function renderIcsReview(){
+  const assignedCount = icsCandidates.filter(c=>c.include && c.companyId).length;
+  return `
+  <div class="modal-overlay" onclick="if(event.target===this) closeIcsReview()">
+    <div class="modal onenote-review-modal">
+      <div class="modal-head">
+        <h2>Import de rendez-vous (.ics)</h2>
+        <button class="btn ghost small" onclick="closeIcsReview()">✕</button>
+      </div>
+      <div style="padding:0 20px 4px;font-size:12.5px;color:var(--ink-500);">
+        ${icsCandidates.length} évènement(s) trouvé(s). Rattachez chacun à la bonne entreprise (les correspondances évidentes sont déjà proposées), décochez ceux à ignorer.
+      </div>
+      <div class="onenote-candidates-list">
+        ${icsCandidates.map(c => `
+          <div class="onenote-candidate ${c.include?'':'onc-excluded'}">
+            <label class="onc-checkbox">
+              <input type="checkbox" ${c.include?'checked':''} onchange="toggleIcsCandidateInclude('${c.id}')">
+            </label>
+            <div class="onc-body">
+              <div class="onc-title">${esc(c.summary || '(sans titre)')}</div>
+              <div class="onc-preview">${fmtDate(c.date)}${c.heure?' à '+esc(c.heure):' (toute la journée)'}</div>
+              <select onchange="setIcsCandidateCompany('${c.id}', this.value)" ${!c.include?'disabled':''}>
+                <option value="">— Choisir l'entreprise —</option>
+                ${DB.companies.slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(co=>`<option value="${co.id}" ${c.companyId===co.id?'selected':''}>${esc(co.nom)}</option>`).join('')}
+              </select>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="inline-form-actions" style="padding:14px 20px;border-top:1px solid var(--line);">
+        <div style="margin-right:auto;font-size:12.5px;color:var(--ink-500);">${assignedCount} rendez-vous prêt(s) à importer</div>
+        <button class="btn" onclick="closeIcsReview()">Annuler</button>
+        <button class="btn primary" onclick="confirmIcsImport()">Importer ${assignedCount>0?`(${assignedCount})`:''}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function renderAgendaPage(){
+  const rdvs = DB.tasks.filter(t=>t.heure && matchesPrestataireFilter(byId(DB.companies, t.companyId)));
+  const open = rdvs.filter(t=>t.statut==='ouverte');
+  const late = open.filter(t=>t.echeance<todayStr).sort((a,b)=> b.echeance===a.echeance ? b.heure.localeCompare(a.heure) : b.echeance.localeCompare(a.echeance));
+  const today = open.filter(t=>t.echeance===todayStr).sort((a,b)=>a.heure.localeCompare(b.heure));
+  const upcoming = open.filter(t=>t.echeance>todayStr).sort((a,b)=> a.echeance===b.echeance ? a.heure.localeCompare(b.heure) : a.echeance.localeCompare(b.echeance));
+
+  const rdvRow = (t) => {
+    const co = byId(DB.companies, t.companyId);
+    if(!co) return '';
+    return `
+    <div class="rdv-row" onclick="selectCompany('${co.id}','${t.id}');setNav('aujourdhui')">
+      <div class="rdv-when">
+        <div class="rdv-heure">${esc(t.heure)}</div>
+        <div class="rdv-date">${fmtDate(t.echeance)}</div>
+      </div>
+      <div class="rdv-body">
+        <div class="rdv-company">${esc(co.nom)}</div>
+        <div class="rdv-title">${esc(t.titre)}</div>
+      </div>
+      <button class="btn small" onclick="event.stopPropagation();openFinish('${t.id}')">Terminer</button>
+    </div>`;
+  };
+
+  const group = (title, arr) => arr.length ? `
+    <div class="agenda-group">
+      <h3>${title} <span class="count">${arr.length}</span></h3>
+      ${arr.map(rdvRow).join('')}
+    </div>` : '';
+
+  return `
+  <div class="card">
+    <h2>📅 Agenda — rendez-vous
+      <button class="btn ghost small" onclick="toggleAddRdv()">${addingRdvOpen?'Annuler':'+ Nouveau rendez-vous'}</button>
+      <button class="btn ghost small" onclick="triggerImportIcs()">📎 Importer (.ics)</button>
+    </h2>
+    <input type="file" id="import-ics-input" accept=".ics" style="display:none;" onchange="importIcsFile(this)">
+    <div style="font-size:12.5px;color:var(--ink-500);margin-bottom:10px;">
+      Retrouvez ici tous vos rendez-vous — qu'ils soient créés directement ou importés depuis votre agenda (export .ics depuis Calendrier sur Mac : clic droit sur l'agenda → Exporter).
+    </div>
+    ${addingRdvOpen ? `
+    <div class="inline-form">
+      <select id="rdv-entreprise">
+        <option value="">— Choisir l'entreprise —</option>
+        ${DB.companies.slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(c=>`<option value="${c.id}">${esc(c.nom)}${c.ville?' — '+esc(c.ville):''}</option>`).join('')}
+      </select>
+      <input id="rdv-titre" placeholder="Objet du rendez-vous">
+      <div class="grid2">
+        <input id="rdv-date" type="date" value="${todayStr}">
+        <input id="rdv-heure" type="time">
+      </div>
+      <div class="inline-form-actions">
+        <button class="btn" onclick="toggleAddRdv()">Annuler</button>
+        <button class="btn primary" onclick="submitRdv()">Ajouter le rendez-vous</button>
+      </div>
+    </div>` : ''}
+    ${!open.length ? `<div class="empty-queue">Aucun rendez-vous programmé pour l'instant.</div>` : ''}
+    ${group('En retard', late)}
+    ${group("Aujourd'hui", today)}
+    ${group('À venir', upcoming)}
+  </div>`;
+}
+
+/* ======================================================================
    PAGE NOTES — toutes les notes (dont visites/audits et photos), tous comptes
    ====================================================================== */
 function setNoteSort(field){
@@ -9228,6 +9493,8 @@ function render(){
     mainHtml = `<div class="layout-full">${renderOpportunitesPage()}</div>`;
   } else if(state.activeNav === 'taches'){
     mainHtml = `<div class="layout-full">${renderTachesPage()}</div>`;
+  } else if(state.activeNav === 'agenda'){
+    mainHtml = `<div class="layout-full">${renderAgendaPage()}</div>`;
   } else if(state.activeNav === 'notes'){
     mainHtml = `<div class="layout-full">${renderNotesPage()}</div>`;
   } else if(state.activeNav === 'carte'){
@@ -9254,6 +9521,7 @@ function render(){
     ${mainHtml}
     ${renderModal()}
     ${oneNoteReviewOpen ? renderOneNoteReview() : ''}
+    ${icsReviewOpen ? renderIcsReview() : ''}
     ${mailingListOpen ? renderMailingModal() : ''}
   `;
   __inRenderCycle = false;
@@ -9322,7 +9590,14 @@ function computeStartingCompanyId(){
   // Même ordre que celui affiché dans la file de travail (voir renderQueue) : Aujourd'hui en
   // premier, puis le retard du plus proche au plus ancien, puis à venir — pour que l'entreprise
   // ouverte au démarrage soit toujours exactement celle de la toute première action visible.
-  const today = open.filter(t=>t.echeance===todayStr).sort((a,b)=> (a.priorite==='haute'?0:1) - (b.priorite==='haute'?0:1));
+  const today = open.filter(t=>t.echeance===todayStr).sort((a,b)=> {
+    // Un rendez-vous avec une heure précise passe avant une tâche sans heure, et entre deux
+    // rendez-vous, le plus proche dans la journée passe en premier.
+    if(a.heure && b.heure) return a.heure.localeCompare(b.heure);
+    if(a.heure && !b.heure) return -1;
+    if(!a.heure && b.heure) return 1;
+    return (a.priorite==='haute'?0:1) - (b.priorite==='haute'?0:1);
+  });
   const late = open.filter(t=>t.echeance<todayStr).sort((a,b)=>b.echeance.localeCompare(a.echeance));
   const upcoming = open.filter(t=>t.echeance>todayStr).sort((a,b)=>a.echeance.localeCompare(b.echeance));
   const topTask = today[0] || late[0] || upcoming[0];
