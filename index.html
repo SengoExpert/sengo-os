@@ -5783,7 +5783,9 @@ function buildHistory(cid){
     items.push({ type:'note', date:n.date, text: typeTag + (base || '(sans texte)') + photoTag, ref:n });
   });
   DB.tasks.filter(t=>t.companyId===cid && t.statut==='terminee').forEach(t => items.push({
-    type:'tache', date:t.dateTerminee || t.echeance, text:`Action terminée : ${t.resultat || t.titre}`, ref:t
+    type:'tache', date:t.dateTerminee || t.echeance,
+    text:`Action terminée : ${t.resultat || t.titre}${t.prochaineNotee ? ' → Prochaine étape : '+t.prochaineNotee : ''}`,
+    ref:t
   }));
   companyDocs(cid).forEach(d => items.push({
     type:'devis', date:d.date, text:`Devis ${d.numero} — ${d.montant} — ${d.statut} (${d.outil})`, ref:d
@@ -5933,6 +5935,7 @@ function submitFinish(){
   task.statut = 'terminee';
   task.resultat = resultat || '(aucun détail saisi)';
   task.dateTerminee = todayStr;
+  task.prochaineNotee = prochaine || ''; // pour l'affichage complet dans l'historique (voir buildHistory)
 
   let newTaskId = null;
   if(prochaine){
@@ -5950,12 +5953,6 @@ function submitFinish(){
       if(prochaine){ opp.prochaineAction = prochaine; opp.echeance = echeance; }
     }
   }
-
-  // Ajoute aussi une note automatique pour tracer l'échange dans l'historique
-  DB.notes.push({
-    id: gen_id_client('n'), companyId:task.companyId, contactId:task.contactId,
-    opportunityId:task.opportunityId, date: todayStr, texte: resultat || task.titre
-  });
 
   closeFinish();
   state.selectedTaskId = newTaskId;
