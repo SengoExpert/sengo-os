@@ -5890,12 +5890,16 @@ function saveEditTask(){
   if(!t) return;
   const titre = document.getElementById('et-titre').value.trim();
   if(!titre){ toast('Le titre est requis.'); return; }
+  const companyId = document.getElementById('et-entreprise').value;
   const echeance = document.getElementById('et-echeance').value || t.echeance;
+  const heure = document.getElementById('et-heure').value || '';
   const priorite = document.getElementById('et-priorite').value;
   const statut = document.getElementById('et-statut').value;
   const resultat = document.getElementById('et-resultat').value.trim();
   t.titre = titre;
+  t.companyId = companyId;
   t.echeance = echeance;
+  t.heure = heure;
   t.priorite = priorite;
   if(statut==='terminee' && t.statut!=='terminee'){
     t.dateTerminee = todayStr;
@@ -8457,6 +8461,7 @@ function renderAgendaPage(){
         <div class="rdv-company">${esc(co.nom)}</div>
         <div class="rdv-title">${esc(t.titre)}</div>
       </div>
+      <button class="btn ghost small" onclick="event.stopPropagation();openEditTask('${t.id}')" title="Modifier (dont l'entreprise)">✎</button>
       <button class="btn small" onclick="event.stopPropagation();openFinish('${t.id}')">Terminer</button>
     </div>`;
   };
@@ -9239,19 +9244,29 @@ function renderEditTaskModal(){
           <label>Intitulé</label>
           <input id="et-titre" type="text" value="${esc(t.titre)}" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13.5px;">
         </div>
+        <div class="modal-field">
+          <label>Entreprise</label>
+          <select id="et-entreprise" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13.5px;">
+            ${DB.companies.slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(c=>`<option value="${c.id}" ${c.id===t.companyId?'selected':''}>${esc(c.nom)}${c.ville?' — '+esc(c.ville):''}</option>`).join('')}
+          </select>
+        </div>
         <div class="grid2">
           <div class="modal-field">
             <label>Échéance</label>
             <input id="et-echeance" type="date" value="${t.echeance}" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13.5px;">
           </div>
           <div class="modal-field">
-            <label>Priorité</label>
-            <select id="et-priorite" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13.5px;">
-              <option value="haute" ${t.priorite==='haute'?'selected':''}>Haute</option>
-              <option value="moyenne" ${t.priorite==='moyenne'?'selected':''}>Moyenne</option>
-              <option value="basse" ${t.priorite==='basse'?'selected':''}>Basse</option>
-            </select>
+            <label>Heure (rendez-vous)</label>
+            <input id="et-heure" type="time" value="${esc(t.heure||'')}" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13.5px;">
           </div>
+        </div>
+        <div class="modal-field">
+          <label>Priorité</label>
+          <select id="et-priorite" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13.5px;">
+            <option value="haute" ${t.priorite==='haute'?'selected':''}>Haute</option>
+            <option value="moyenne" ${t.priorite==='moyenne'?'selected':''}>Moyenne</option>
+            <option value="basse" ${t.priorite==='basse'?'selected':''}>Basse</option>
+          </select>
         </div>
         <div class="modal-field">
           <label>Statut</label>
