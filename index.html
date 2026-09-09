@@ -5901,8 +5901,17 @@ function saveEditTask(){
   t.echeance = echeance;
   t.heure = heure;
   t.priorite = priorite;
-  if(statut==='terminee' && t.statut!=='terminee'){
+  const wasTerminee = t.statut === 'terminee';
+  if(statut==='terminee' && !wasTerminee){
     t.dateTerminee = todayStr;
+    if(state.selectedTaskId === t.id){
+      // Sans ça, le bandeau "Tâche en cours" continuait d'afficher cette tâche comme si elle
+      // était toujours active, même après l'avoir clôturée ici — la tâche disparaissait bien de
+      // la file de gauche, mais restait affichée en haut du détail entreprise. En vidant la
+      // sélection, le mécanisme déjà en place ailleurs reprend automatiquement la main pour
+      // proposer la tâche ouverte suivante de ce compte.
+      state.selectedTaskId = null;
+    }
   }
   t.statut = statut;
   t.resultat = resultat;
