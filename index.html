@@ -5927,6 +5927,16 @@ function performDeleteTaskFromEdit(taskId){
   toast('Tâche supprimée.');
   render();
 }
+function deleteTaskDirect(taskId){
+  const t = byId(DB.tasks, taskId);
+  if(!t) return;
+  state.pendingConfirm = {
+    message: `Supprimer définitivement la tâche « ${t.titre} » ?`,
+    onConfirmFn: 'performDeleteTaskFromEdit',
+    payload: taskId,
+  };
+  render();
+}
 const FINISH_QUICK_DATES = [[1,'Demain'],[7,'Semaine prochaine'],[15,'Dans 15 jours'],[30,'Dans 1 mois']];
 function setPendingEcheance(v){
   state.pendingEcheance = v;
@@ -8300,6 +8310,7 @@ function renderTacheTableBody(list){
               <td style="display:flex;gap:6px;justify-content:flex-end;">
                 ${t.statut==='ouverte' ? `<button class="btn small primary" onclick="event.stopPropagation();openFinish('${t.id}')">✓ Terminer</button>` : ''}
                 <button class="btn small" onclick="event.stopPropagation();openEditTask('${t.id}')">✎ Modifier</button>
+                <button class="btn small danger-ghost" onclick="event.stopPropagation();deleteTaskDirect('${t.id}')" title="Supprimer définitivement cette tâche">🗑</button>
               </td>
             </tr>`).join('')}
           ${!list.length ? `<tr><td colspan="6"><div class="empty-queue" style="padding:16px;">Aucune tâche ne correspond à ces filtres.</div></td></tr>` : ''}`;
