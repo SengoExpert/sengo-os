@@ -6221,9 +6221,9 @@ function onAddrLookupInput(target, value){
   addrLookupExpanded = null;
   clearTimeout(__addrLookupTimer);
   const q = value.trim();
-  if(q.length < 2){ addrLookup.results = []; addrLookup.loading = false; render(); return; }
+  if(q.length < 2){ addrLookup.results = []; addrLookup.loading = false; updateAddrLookupResultsOnly(target); return; }
   addrLookup.loading = true;
-  render();
+  updateAddrLookupResultsOnly(target);
   __addrLookupTimer = setTimeout(() => runAddrLookup(target, q), 320);
 }
 
@@ -6254,19 +6254,19 @@ async function runAddrLookup(target, q){
       };
     }).filter(c => c.etablissements.length);
     addrLookup.loading = false;
-    render();
+    updateAddrLookupResultsOnly(target);
   }catch(err){
     if(seq !== __addrLookupSeq) return;
     addrLookup.loading = false;
     addrLookup.error = "Recherche indisponible pour l'instant — poursuis en saisie manuelle.";
     addrLookup.results = [];
-    render();
+    updateAddrLookupResultsOnly(target);
   }
 }
 
 function toggleAddrLookupExpand(i){
   addrLookupExpanded = addrLookupExpanded === i ? null : i;
-  render();
+  updateAddrLookupResultsOnly(addrLookup.target);
 }
 
 function applyAddrSuggestion(target, ci, ei){
@@ -6294,14 +6294,19 @@ function applyAddrSuggestion(target, ci, ei){
 }
 
 function renderAddrLookupBox(target){
-  const active = addrLookup.target === target;
   const fk = 'addr-lookup-' + target;
   return `
   <div class="field-row addr-lookup">
     <label>🔎 Retrouver l'adresse (répertoire Sirene)</label>
     <input type="text" placeholder="Retaper la raison sociale pour chercher…"
-           value="${active ? esc(addrLookup.query) : ''}"
+           value="${addrLookup.target===target ? esc(addrLookup.query) : ''}"
            oninput="onAddrLookupInput('${target}', this.value)" data-focus-key="${fk}">
+    <div id="addr-lookup-results-${esc(target)}">${renderAddrLookupResultsOnly(target)}</div>
+  </div>`;
+}
+function renderAddrLookupResultsOnly(target){
+  const active = addrLookup.target === target;
+  return `
     ${active && addrLookup.loading ? `<div class="addr-lookup-status">Recherche…</div>` : ''}
     ${active && addrLookup.error ? `<div class="addr-lookup-status error">${esc(addrLookup.error)}</div>` : ''}
     ${active && !addrLookup.loading && !addrLookup.error && addrLookup.query.trim().length>=2 && addrLookup.results.length===0 ? `<div class="addr-lookup-status">Aucune correspondance dans le répertoire — poursuis en saisie manuelle.</div>` : ''}
@@ -6320,7 +6325,11 @@ function renderAddrLookupBox(target){
           </button>`).join('') : ''}
         </div>`).join('')}
     </div>` : ''}
-  </div>`;
+  `;
+}
+function updateAddrLookupResultsOnly(target){
+  const el = document.getElementById('addr-lookup-results-'+target);
+  if(el) el.innerHTML = renderAddrLookupResultsOnly(target);
 }
 function updatePrestataire(cid, value){
   const co = byId(DB.companies, cid);
@@ -7036,7 +7045,7 @@ function renderTaskHero(task, co){
       <button onclick="postponeTask('${task.id}',15)">15 jours</button>
       <button onclick="postponeTask('${task.id}',30)">1 mois</button>
       <span class="postpone-custom">
-        <input type="date" min="${todayStr}" onchange="postponeTaskCustom('${task.id}', this.value)">
+        <input type="date" min="${todayStr}" value="${addDays(1)}" onchange="postponeTaskCustom('${task.id}', this.value)">
       </span>
     </div>` : ''}
   </div>`;
@@ -7811,7 +7820,7 @@ function renderEntreprisesPage(){
     <div class="ent-head">
       <div>
         <div class="co-name" style="font-size:19px;">Entreprises</div>
-        <div style="font-size:12.5px;color:var(--ink-500);">${list.length} sur ${DB.companies.length} — triez une colonne en cliquant sur son en-tête</div>
+        <div style="font-size:12.5px;color:var(--ink-500);" id="ent-count">${list.length} sur ${DB.companies.length} — triez une colonne en cliquant sur son en-tête</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;position:relative;">
         <div class="import-menu-wrap">
@@ -7834,7 +7843,7 @@ function renderEntreprisesPage(){
     ${renderInlineCompanyForm()}
 
     <div class="card ent-filters">
-      <input type="text" placeholder="Rechercher une entreprise…" value="${esc(f.q)}" oninput="state.entFilters.q=this.value;render()" data-focus-key="ent-search">
+      <input type="text" placeholder="Rechercher une entreprise…" value="${esc(f.q)}" oninput="state.entFilters.q=this.value;updateEntTableOnly()" data-focus-key="ent-search">
       <select onchange="state.entFilters.secteur=this.value;render()">
         <option value="tous" ${f.secteur==='tous'?'selected':''}>Tous secteurs</option>
         ${secteurs.map(s=>`<option value="${esc(s)}" ${f.secteur===s?'selected':''}>${esc(s)}</option>`).join('')}
@@ -7888,7 +7897,13 @@ function renderEntreprisesPage(){
             <th></th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="ent-tbody">${renderEntTableBody(list)}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+function renderEntTableBody(list){
+  return `
           ${list.map(c=>`
             <tr onclick="viewCompanyInline('${c.id}')">
               <td>
@@ -7904,11 +7919,14 @@ function renderEntreprisesPage(){
               <td><span class="sector-dot" style="background:${PRESTATAIRE_COLORS[c.prestataire]}"></span>${c.prestataire}<div class="ent-region">${esc(c.partenaire)}</div></td>
               <td><button class="btn small" onclick="event.stopPropagation();viewCompanyInline('${c.id}')">Ouvrir →</button></td>
             </tr>`).join('')}
-          ${!list.length ? `<tr><td colspan="9"><div class="empty-queue" style="padding:16px;">Aucune entreprise ne correspond à ces filtres.</div></td></tr>` : ''}
-        </tbody>
-      </table>
-    </div>
-  </div>`;
+          ${!list.length ? `<tr><td colspan="9"><div class="empty-queue" style="padding:16px;">Aucune entreprise ne correspond à ces filtres.</div></td></tr>` : ''}`;
+}
+function updateEntTableOnly(){
+  const list = filteredSortedCompanies();
+  const tbody = document.getElementById('ent-tbody');
+  if(tbody) tbody.innerHTML = renderEntTableBody(list);
+  const count = document.getElementById('ent-count');
+  if(count) count.textContent = `${list.length} sur ${DB.companies.length} — triez une colonne en cliquant sur son en-tête`;
 }
 
 /* ======================================================================
@@ -7963,12 +7981,12 @@ function renderContactsPage(){
     <div class="ent-head">
       <div>
         <div class="co-name" style="font-size:19px;">Contacts</div>
-        <div style="font-size:12.5px;color:var(--ink-500);">${list.length} sur ${DB.contacts.length} — triez une colonne en cliquant sur son en-tête</div>
+        <div style="font-size:12.5px;color:var(--ink-500);" id="ct-count">${list.length} sur ${DB.contacts.length} — triez une colonne en cliquant sur son en-tête</div>
       </div>
     </div>
 
     <div class="card ent-filters">
-      <input type="text" placeholder="Rechercher un contact ou une entreprise…" value="${esc(f.q)}" oninput="state.ctFilters.q=this.value;render()" data-focus-key="ct-search">
+      <input type="text" placeholder="Rechercher un contact ou une entreprise…" value="${esc(f.q)}" oninput="state.ctFilters.q=this.value;updateCtTableOnly()" data-focus-key="ct-search">
       <select onchange="state.ctFilters.role=this.value;render()">
         <option value="tous" ${f.role==='tous'?'selected':''}>Tous rôles</option>
         ${Object.entries(ROLE_LABELS).map(([k,v])=>`<option value="${k}" ${f.role===k?'selected':''}>${v}</option>`).join('')}
@@ -7989,7 +8007,13 @@ function renderContactsPage(){
             <th></th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="ct-tbody">${renderCtTableBody(list)}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+function renderCtTableBody(list){
+  return `
           ${list.map(k=>`
             <tr onclick="editContactFrom('${k.companyId}','${k.id}')">
               <td>
@@ -8006,11 +8030,14 @@ function renderContactsPage(){
               <td>${k.email ? `<a class="ct-link" href="mailto:${esc(k.email)}" onclick="event.stopPropagation()">${esc(k.email)}</a>` : '—'}</td>
               <td><button class="btn small primary" onclick="event.stopPropagation();editContactFrom('${k.companyId}','${k.id}')">✎ Modifier</button></td>
             </tr>`).join('')}
-          ${!list.length ? `<tr><td colspan="7"><div class="empty-queue" style="padding:16px;">Aucun contact ne correspond à ces filtres.</div></td></tr>` : ''}
-        </tbody>
-      </table>
-    </div>
-  </div>`;
+          ${!list.length ? `<tr><td colspan="7"><div class="empty-queue" style="padding:16px;">Aucun contact ne correspond à ces filtres.</div></td></tr>` : ''}`;
+}
+function updateCtTableOnly(){
+  const list = filteredSortedContacts();
+  const tbody = document.getElementById('ct-tbody');
+  if(tbody) tbody.innerHTML = renderCtTableBody(list);
+  const count = document.getElementById('ct-count');
+  if(count) count.textContent = `${list.length} sur ${DB.contacts.length} — triez une colonne en cliquant sur son en-tête`;
 }
 
 /* ======================================================================
@@ -8075,7 +8102,7 @@ function renderOpportunitesPage(){
     <div class="ent-head">
       <div>
         <div class="co-name" style="font-size:19px;">Opportunités</div>
-        <div style="font-size:12.5px;color:var(--ink-500);">${list.length} sur ${DB.opportunities.length} — ${activeCount} active(s), ${closedCount} gagnée(s)/perdue(s) — triez une colonne en cliquant sur son en-tête</div>
+        <div style="font-size:12.5px;color:var(--ink-500);" id="opp-count">${list.length} sur ${DB.opportunities.length} — ${activeCount} active(s), ${closedCount} gagnée(s)/perdue(s) — triez une colonne en cliquant sur son en-tête</div>
       </div>
     </div>
 
@@ -8085,7 +8112,7 @@ function renderOpportunitesPage(){
     </div>` : ''}
 
     <div class="card ent-filters">
-      <input type="text" placeholder="Rechercher une opportunité ou une entreprise…" value="${esc(f.q)}" oninput="state.oppFilters.q=this.value;render()" data-focus-key="opp-search">
+      <input type="text" placeholder="Rechercher une opportunité ou une entreprise…" value="${esc(f.q)}" oninput="state.oppFilters.q=this.value;updateOppTableOnly()" data-focus-key="opp-search">
       <select onchange="state.oppFilters.statut=this.value;render()">
         <option value="tous" ${f.statut==='tous'?'selected':''}>Tous statuts</option>
         <option value="actives" ${f.statut==='actives'?'selected':''}>Actives uniquement</option>
@@ -8114,7 +8141,13 @@ function renderOpportunitesPage(){
             <th></th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="opp-tbody">${renderOppTableBody(list)}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+function renderOppTableBody(list){
+  return `
           ${list.map(o=>{
             const expanded = state.oppExpandedId === o.id;
             return `
@@ -8150,11 +8183,17 @@ function renderOpportunitesPage(){
               </td>
             </tr>` : ''}`;
           }).join('')}
-          ${!list.length ? `<tr><td colspan="8"><div class="empty-queue" style="padding:16px;">Aucune opportunité ne correspond à ces filtres.</div></td></tr>` : ''}
-        </tbody>
-      </table>
-    </div>
-  </div>`;
+          ${!list.length ? `<tr><td colspan="8"><div class="empty-queue" style="padding:16px;">Aucune opportunité ne correspond à ces filtres.</div></td></tr>` : ''}`;
+}
+function updateOppTableOnly(){
+  const list = filteredSortedOpportunites();
+  const tbody = document.getElementById('opp-tbody');
+  if(tbody) tbody.innerHTML = renderOppTableBody(list);
+  const f = state.oppFilters;
+  const activeCount = DB.opportunities.filter(o=>o.statut!=='gagnee' && o.statut!=='perdue').length;
+  const closedCount = DB.opportunities.length - activeCount;
+  const count = document.getElementById('opp-count');
+  if(count) count.textContent = `${list.length} sur ${DB.opportunities.length} — ${activeCount} active(s), ${closedCount} gagnée(s)/perdue(s) — triez une colonne en cliquant sur son en-tête`;
 }
 
 /* ======================================================================
@@ -8212,12 +8251,12 @@ function renderTachesPage(){
     <div class="ent-head">
       <div>
         <div class="co-name" style="font-size:19px;">Tâches</div>
-        <div style="font-size:12.5px;color:var(--ink-500);">${list.length} affichée(s) — ${openCount} ouverte(s) au total — triez une colonne en cliquant sur son en-tête</div>
+        <div style="font-size:12.5px;color:var(--ink-500);" id="tache-count">${list.length} affichée(s) — ${openCount} ouverte(s) au total — triez une colonne en cliquant sur son en-tête</div>
       </div>
     </div>
 
     <div class="card ent-filters">
-      <input type="text" placeholder="Rechercher une tâche ou une entreprise…" value="${esc(f.q)}" oninput="state.tacheFilters.q=this.value;render()" data-focus-key="tache-search">
+      <input type="text" placeholder="Rechercher une tâche ou une entreprise…" value="${esc(f.q)}" oninput="state.tacheFilters.q=this.value;updateTacheTableOnly()" data-focus-key="tache-search">
       <select onchange="state.tacheFilters.statut=this.value;render()">
         <option value="ouverte" ${f.statut==='ouverte'?'selected':''}>Ouvertes</option>
         <option value="terminee" ${f.statut==='terminee'?'selected':''}>Terminées</option>
@@ -8244,7 +8283,13 @@ function renderTachesPage(){
             <th></th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="tache-tbody">${renderTacheTableBody(list)}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+function renderTacheTableBody(list){
+  return `
           ${list.map(t=>`
             <tr onclick="selectCompany('${t.companyId}','${t.id}');state.activeNav='aujourdhui';render()" style="${t.statut==='terminee'?'opacity:.55;':''}">
               <td><div class="ent-name">${esc(t.titre)}</div>${t.statut==='terminee'&&t.resultat?`<div class="ent-region">${esc(t.resultat.slice(0,80))}${t.resultat.length>80?'…':''}</div>`:''}</td>
@@ -8257,11 +8302,15 @@ function renderTachesPage(){
                 <button class="btn small" onclick="event.stopPropagation();openEditTask('${t.id}')">✎ Modifier</button>
               </td>
             </tr>`).join('')}
-          ${!list.length ? `<tr><td colspan="6"><div class="empty-queue" style="padding:16px;">Aucune tâche ne correspond à ces filtres.</div></td></tr>` : ''}
-        </tbody>
-      </table>
-    </div>
-  </div>`;
+          ${!list.length ? `<tr><td colspan="6"><div class="empty-queue" style="padding:16px;">Aucune tâche ne correspond à ces filtres.</div></td></tr>` : ''}`;
+}
+function updateTacheTableOnly(){
+  const list = filteredSortedTaches();
+  const tbody = document.getElementById('tache-tbody');
+  if(tbody) tbody.innerHTML = renderTacheTableBody(list);
+  const openCount = DB.tasks.filter(t=>t.statut==='ouverte').length;
+  const count = document.getElementById('tache-count');
+  if(count) count.textContent = `${list.length} affichée(s) — ${openCount} ouverte(s) au total — triez une colonne en cliquant sur son en-tête`;
 }
 
 /* ======================================================================
@@ -8555,7 +8604,7 @@ function renderNotesPage(){
     <div class="ent-head">
       <div>
         <div class="co-name" style="font-size:19px;">Notes</div>
-        <div style="font-size:12.5px;color:var(--ink-500);">${list.length} sur ${DB.notes.length} — triez une colonne en cliquant sur son en-tête</div>
+        <div style="font-size:12.5px;color:var(--ink-500);" id="note-count">${list.length} sur ${DB.notes.length} — triez une colonne en cliquant sur son en-tête</div>
       </div>
       <button class="btn primary" onclick="toggleNotesPageForm()">${notesPageFormOpen ? 'Annuler' : '+ Nouvelle note / RDV'}</button>
     </div>
@@ -8563,7 +8612,7 @@ function renderNotesPage(){
     ${renderNotesPageForm()}
 
     <div class="card ent-filters">
-      <input type="text" placeholder="Rechercher dans les notes ou une entreprise…" value="${esc(f.q)}" oninput="state.noteFilters.q=this.value;render()" data-focus-key="note-search">
+      <input type="text" placeholder="Rechercher dans les notes ou une entreprise…" value="${esc(f.q)}" oninput="state.noteFilters.q=this.value;updateNoteTableOnly()" data-focus-key="note-search">
       <select onchange="state.noteFilters.type=this.value;render()">
         <option value="tous" ${f.type==='tous'?'selected':''}>Tous types</option>
         <option value="note" ${f.type==='note'?'selected':''}>Notes libres</option>
@@ -8585,7 +8634,13 @@ function renderNotesPage(){
             <th></th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="note-tbody">${renderNoteTableBody(list)}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+function renderNoteTableBody(list){
+  return `
           ${list.map(n=>`
             <tr onclick="selectCompany('${n.companyId}');state.activeNav='aujourdhui';render()">
               <td class="mono">${fmtDate(n.date)}</td>
@@ -8599,11 +8654,14 @@ function renderNotesPage(){
                 </div>` : '—'}</td>
               <td><button class="btn small" onclick="event.stopPropagation();selectCompany('${n.companyId}');state.activeNav='aujourdhui';render()">Voir le compte →</button> <button class="btn small danger-ghost" onclick="event.stopPropagation();deleteNote('${n.id}')" title="Supprimer cette note">🗑</button></td>
             </tr>`).join('')}
-          ${!list.length ? `<tr><td colspan="6"><div class="empty-queue" style="padding:16px;">Aucune note ne correspond à ces filtres.</div></td></tr>` : ''}
-        </tbody>
-      </table>
-    </div>
-  </div>`;
+          ${!list.length ? `<tr><td colspan="6"><div class="empty-queue" style="padding:16px;">Aucune note ne correspond à ces filtres.</div></td></tr>` : ''}`;
+}
+function updateNoteTableOnly(){
+  const list = filteredSortedNotesAll();
+  const tbody = document.getElementById('note-tbody');
+  if(tbody) tbody.innerHTML = renderNoteTableBody(list);
+  const count = document.getElementById('note-count');
+  if(count) count.textContent = `${list.length} sur ${DB.notes.length} — triez une colonne en cliquant sur son en-tête`;
 }
 
 /* ======================================================================
@@ -8879,17 +8937,13 @@ function clusterMarkers(list, view){
   return groups;
 }
 
-function renderMapView(){
-  ensureMapView();
+function computeMapDynamicParts(){
   const view = currentView();
   const filtered = filteredMapCompanies();
   const allFiltered = filteredMapCompaniesAll();
   const nonGeocoded = allFiltered.length - filtered.length;
-  const secteurs = [...new Set(DB.companies.map(c=>c.secteur))].sort();
-  const regions = [...new Set(DB.companies.map(c=>c.region).filter(Boolean))].sort();
   const deptCounts = {};
   DB.companies.forEach(c=>{ const d=getCompanyDept(c); if(d){ deptCounts[d.code] = (deptCounts[d.code]||0)+1; } });
-  const deptOptions = Object.keys(deptCounts).sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
   const zoomedIn = (view.lonMax-view.lonMin) < 2.2;
   const deptZoomedIn = (view.lonMax-view.lonMin) < 4.5;
 
@@ -8950,6 +9004,39 @@ function renderMapView(){
       </g>`;
   }
 
+  const mapLayerSvg = deptBoundariesSvg + deptLabelsSvg + markerSvg;
+
+  const sidebarInfoHtml = `${filtered.length} entreprise(s) sur la carte${nonGeocoded>0?` · <a href="#" onclick="state.showNonGeocoded=!state.showNonGeocoded;render();return false;" style="color:var(--amber);font-weight:600;">${nonGeocoded} non géolocalisée(s)${state.showNonGeocoded?' ▲':' ▼'}</a>`:''}${(state.mapSecteurFilter!=='tous'||state.mapRegionFilter!=='tous'||state.mapDeptFilter!=='tous'||state.mapQuery)?` · <a href="#" onclick="state.mapSecteurFilter='tous';state.mapRegionFilter='tous';state.mapDeptFilter='tous';state.mapQuery='';render();return false;" style="color:var(--brand-orange-dark);">réinitialiser</a>`:''}` +
+    (state.showNonGeocoded && nonGeocoded>0 ? `
+    <div class="non-geo-list">
+      ${allFiltered.filter(c=>c.lat==null||c.lon==null).map(c=>`
+        <div class="non-geo-item" onclick="selectCompany('${c.id}');state.activeNav='aujourdhui';render()">
+          <span>${esc(c.nom)}</span><span class="ent-region">${esc(c.ville||'ville inconnue')} — cliquer pour compléter l'adresse</span>
+        </div>`).join('')}
+    </div>` : '');
+
+  return {view, filtered, allFiltered, nonGeocoded, deptCounts, mapLayerSvg, sidebarInfoHtml};
+}
+function updateMapResultsOnly(){
+  const {mapLayerSvg, sidebarInfoHtml} = computeMapDynamicParts();
+  const layer = document.getElementById('mapLayer');
+  // Le rectangle de fond (gestion du glisser/zoom tactile) doit rester en premier enfant —
+  // on ne remplace donc que ce qui vient après lui, jamais le <rect> lui-même.
+  if(layer){
+    const bgRect = layer.querySelector('.map-bg');
+    layer.innerHTML = '';
+    if(bgRect) layer.appendChild(bgRect);
+    layer.insertAdjacentHTML('beforeend', mapLayerSvg);
+  }
+  const sidebarInfo = document.getElementById('map-sidebar-info');
+  if(sidebarInfo) sidebarInfo.innerHTML = sidebarInfoHtml;
+}
+function renderMapView(){
+  ensureMapView();
+  const {view, filtered, allFiltered, nonGeocoded, deptCounts, mapLayerSvg, sidebarInfoHtml} = computeMapDynamicParts();
+  const secteurs = [...new Set(DB.companies.map(c=>c.secteur))].sort();
+  const regions = [...new Set(DB.companies.map(c=>c.region).filter(Boolean))].sort();
+  const deptOptions = Object.keys(deptCounts).sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
   const lastTourEndpointForUI = findLastTourEndpoint();
   const legendSecteurs = Object.entries(SECTOR_COLORS)
     .filter(([s]) => secteurs.includes(s))
@@ -8984,9 +9071,7 @@ function renderMapView(){
               style="touch-action:none;" pointer-events="all"
               onpointerdown="onMapPointerDown(event)" onpointermove="onMapPointerMove(event)"
               onpointerup="onMapPointerUp(event)" onpointercancel="onMapPointerUp(event)"/>
-            ${deptBoundariesSvg}
-            ${deptLabelsSvg}
-            ${markerSvg}
+            ${mapLayerSvg}
           </g>
         </svg>
         <div class="legend">
@@ -9002,7 +9087,7 @@ function renderMapView(){
         <div class="card">
           <h2>Filtrer / rechercher</h2>
           <input type="text" placeholder="Nom d'entreprise ou ville…" value="${esc(state.mapQuery)}"
-            oninput="state.mapQuery=this.value;state.clusterViewIds=null;render()" data-focus-key="map-search" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12.5px;margin-bottom:8px;">
+            oninput="state.mapQuery=this.value;state.clusterViewIds=null;updateMapResultsOnly()" data-focus-key="map-search" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12.5px;margin-bottom:8px;">
           <div class="filter-row">
             <select onchange="state.mapSecteurFilter=this.value;state.clusterViewIds=null;render()">
               <option value="tous" ${state.mapSecteurFilter==='tous'?'selected':''}>Tous secteurs</option>
@@ -9022,14 +9107,7 @@ function renderMapView(){
               }).join('')}
             </select>
           </div>
-          <div style="font-size:11.5px;color:var(--ink-500);margin-top:8px;">${filtered.length} entreprise(s) sur la carte${nonGeocoded>0?` · <a href="#" onclick="state.showNonGeocoded=!state.showNonGeocoded;render();return false;" style="color:var(--amber);font-weight:600;">${nonGeocoded} non géolocalisée(s)${state.showNonGeocoded?' ▲':' ▼'}</a>`:''}${(state.mapSecteurFilter!=='tous'||state.mapRegionFilter!=='tous'||state.mapDeptFilter!=='tous'||state.mapQuery)?` · <a href="#" onclick="state.mapSecteurFilter='tous';state.mapRegionFilter='tous';state.mapDeptFilter='tous';state.mapQuery='';render();return false;" style="color:var(--brand-orange-dark);">réinitialiser</a>`:''}</div>
-          ${state.showNonGeocoded && nonGeocoded>0 ? `
-          <div class="non-geo-list">
-            ${allFiltered.filter(c=>c.lat==null||c.lon==null).map(c=>`
-              <div class="non-geo-item" onclick="selectCompany('${c.id}');state.activeNav='aujourdhui';render()">
-                <span>${esc(c.nom)}</span><span class="ent-region">${esc(c.ville||'ville inconnue')} — cliquer pour compléter l'adresse</span>
-              </div>`).join('')}
-          </div>` : ''}
+          <div style="font-size:11.5px;color:var(--ink-500);margin-top:8px;" id="map-sidebar-info">${sidebarInfoHtml}</div>
         </div>
 
         <div class="card" style="max-height:340px;overflow:auto;">
