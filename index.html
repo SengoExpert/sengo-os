@@ -6188,7 +6188,7 @@ function renderNotesPageForm(){
             <div class="npp-item">
               <img src="${p.dataUrl}" alt="${esc(p.name)}">
               <button onclick="removePendingPhoto('${p.id}')" title="Retirer">✕</button>
-              <input type="text" class="npp-title" placeholder="Titre (ex. façade, tableau élec.)" value="${esc(p.titre||'')}" oninput="updatePendingPhotoTitle('${p.id}', this.value)">
+              <input type="text" class="npp-title" placeholder="Titre (ex. façade, tableau élec.)" value="${esc(p.titre||'')}" oninput="updatePendingPhotoTitle('${p.id}', this.value)" data-focus-key="npp-title-${p.id}">
             </div>`).join('')}
         </div>` : ''}
       <div class="note-add-row">
@@ -6452,17 +6452,19 @@ function onCompanyPickerBlur(instanceId){
 }
 
 function updatePrestataire(cid, value){
+  if(__inRenderCycle) return; // voir updateCompanyField : évite un déclenchement fantôme
   const co = byId(DB.companies, cid);
   co.prestataire = value;
   co.partenaire = value === 'SENGO EXPERT' ? 'SENGO Expert direct' : value;
   toast('Prestataire mis à jour : ' + value);
-  render();
+  setTimeout(render, 0);
 }
 function updatePotentiel(cid, value){
+  if(__inRenderCycle) return; // voir updateCompanyField : évite un déclenchement fantôme
   const co = byId(DB.companies, cid);
   co.potentiel = value;
   toast('Potentiel mis à jour : ' + value);
-  render();
+  setTimeout(render, 0);
 }
 function toggleStatutClient(cid){
   const co = byId(DB.companies, cid);
@@ -6509,27 +6511,27 @@ function renderInlineCompanyForm(){
   <div class="card">
     <h2>Nouvelle entreprise</h2>
     <div class="inline-form">
-      <input id="nco-nom" placeholder="Raison sociale *" value="${esc(newCompanyForm.nom)}" oninput="newCompanyForm.nom=this.value">
+      <input id="nco-nom" placeholder="Raison sociale *" value="${esc(newCompanyForm.nom)}" oninput="newCompanyForm.nom=this.value" data-focus-key="nco-nom">
       ${renderAddrLookupBox('new')}
       <div class="grid2">
         <select id="nco-secteur" onchange="newCompanyForm.secteur=this.value">
           <option value="">Secteur…</option>
           ${secteurs.map(s=>`<option value="${esc(s)}" ${newCompanyForm.secteur===s?'selected':''}>${esc(s)}</option>`).join('')}
         </select>
-        <input id="nco-activite" placeholder="Activité" value="${esc(newCompanyForm.activite)}" oninput="newCompanyForm.activite=this.value">
+        <input id="nco-activite" placeholder="Activité" value="${esc(newCompanyForm.activite)}" oninput="newCompanyForm.activite=this.value" data-focus-key="nco-activite">
       </div>
-      <input id="nco-rue" placeholder="Rue" value="${esc(newCompanyForm.rue)}" oninput="newCompanyForm.rue=this.value">
+      <input id="nco-rue" placeholder="Rue" value="${esc(newCompanyForm.rue)}" oninput="newCompanyForm.rue=this.value" data-focus-key="nco-rue">
       <div class="grid2">
-        <input id="nco-cp" placeholder="Code postal" value="${esc(newCompanyForm.codePostal)}" oninput="newCompanyForm.codePostal=this.value">
-        <input id="nco-ville" placeholder="Ville" value="${esc(newCompanyForm.ville)}" oninput="newCompanyForm.ville=this.value">
+        <input id="nco-cp" placeholder="Code postal" value="${esc(newCompanyForm.codePostal)}" oninput="newCompanyForm.codePostal=this.value" data-focus-key="nco-cp">
+        <input id="nco-ville" placeholder="Ville" value="${esc(newCompanyForm.ville)}" oninput="newCompanyForm.ville=this.value" data-focus-key="nco-ville">
       </div>
       <select id="nco-region" onchange="newCompanyForm.region=this.value">
         <option value="">Région…</option>
         ${regionsKnown.map(r=>`<option value="${esc(r)}" ${newCompanyForm.region===r?'selected':''}>${esc(r)}</option>`).join('')}
       </select>
       <div class="grid2">
-        <input id="nco-tel" placeholder="Téléphone" value="${esc(newCompanyForm.tel)}" oninput="newCompanyForm.tel=this.value">
-        <input id="nco-site" placeholder="Site web" value="${esc(newCompanyForm.site)}" oninput="newCompanyForm.site=this.value">
+        <input id="nco-tel" placeholder="Téléphone" value="${esc(newCompanyForm.tel)}" oninput="newCompanyForm.tel=this.value" data-focus-key="nco-tel">
+        <input id="nco-site" placeholder="Site web" value="${esc(newCompanyForm.site)}" oninput="newCompanyForm.site=this.value" data-focus-key="nco-site">
       </div>
       <div class="grid2">
         <select id="nco-prestataire" onchange="newCompanyForm.prestataire=this.value">
@@ -6544,15 +6546,15 @@ function renderInlineCompanyForm(){
       <div style="border-top:1px solid var(--line);margin-top:6px;padding-top:12px;">
         <div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-500);font-weight:700;margin-bottom:8px;">Contact principal (facultatif)</div>
         <div class="grid2">
-          <input id="nco-ct-prenom" placeholder="Prénom" value="${esc(newCompanyForm.ctPrenom)}" oninput="newCompanyForm.ctPrenom=this.value">
-          <input id="nco-ct-nom" placeholder="Nom" value="${esc(newCompanyForm.ctNom)}" oninput="newCompanyForm.ctNom=this.value">
+          <input id="nco-ct-prenom" placeholder="Prénom" value="${esc(newCompanyForm.ctPrenom)}" oninput="newCompanyForm.ctPrenom=this.value" data-focus-key="nco-ct-prenom">
+          <input id="nco-ct-nom" placeholder="Nom" value="${esc(newCompanyForm.ctNom)}" oninput="newCompanyForm.ctNom=this.value" data-focus-key="nco-ct-nom">
         </div>
-        <input id="nco-ct-fonction" placeholder="Fonction" style="margin-top:8px;" value="${esc(newCompanyForm.ctFonction)}" oninput="newCompanyForm.ctFonction=this.value">
+        <input id="nco-ct-fonction" placeholder="Fonction" style="margin-top:8px;" value="${esc(newCompanyForm.ctFonction)}" oninput="newCompanyForm.ctFonction=this.value" data-focus-key="nco-ct-fonction">
         <div class="grid2" style="margin-top:8px;">
-          <input id="nco-ct-tel" placeholder="Téléphone fixe" value="${esc(newCompanyForm.ctTel)}" oninput="newCompanyForm.ctTel=this.value">
-          <input id="nco-ct-mobile" placeholder="Portable" value="${esc(newCompanyForm.ctMobile)}" oninput="newCompanyForm.ctMobile=this.value">
+          <input id="nco-ct-tel" placeholder="Téléphone fixe" value="${esc(newCompanyForm.ctTel)}" oninput="newCompanyForm.ctTel=this.value" data-focus-key="nco-ct-tel">
+          <input id="nco-ct-mobile" placeholder="Portable" value="${esc(newCompanyForm.ctMobile)}" oninput="newCompanyForm.ctMobile=this.value" data-focus-key="nco-ct-mobile">
         </div>
-        <input id="nco-ct-email" placeholder="Email" style="margin-top:8px;" value="${esc(newCompanyForm.ctEmail)}" oninput="newCompanyForm.ctEmail=this.value">
+        <input id="nco-ct-email" placeholder="Email" style="margin-top:8px;" value="${esc(newCompanyForm.ctEmail)}" oninput="newCompanyForm.ctEmail=this.value" data-focus-key="nco-ct-email">
         <select id="nco-ct-role" style="margin-top:8px;" onchange="newCompanyForm.ctRole=this.value">
           <option value="decideur" ${newCompanyForm.ctRole==='decideur'?'selected':''}>Décideur</option>
           <option value="prescripteur" ${newCompanyForm.ctRole==='prescripteur'?'selected':''}>Prescripteur</option>
@@ -6741,10 +6743,11 @@ function performMergeCompanies(sourceId, targetId){
 }
 
 function changeOppStatus(oid, value){
+  if(__inRenderCycle) return; // voir updateCompanyField : évite un déclenchement fantôme
   const opp = byId(DB.opportunities, oid);
   opp.statut = value;
   toast(`Statut mis à jour : ${STATUS_LABELS[value]}`);
-  render();
+  setTimeout(render, 0);
 }
 
 let addingContactFor = null;
@@ -7147,7 +7150,7 @@ function renderInlineTaskForm(cid){
       <option value="">Autre (personnalisé)</option>
     </select>
     <div class="grid2">
-      <input id="nt-titre" placeholder="Intitulé de la tâche" />
+      <input id="nt-titre" placeholder="Intitulé de la tâche" data-focus-key="nt-titre" />
       <input id="nt-echeance" type="date" value="${todayStr}" />
     </div>
     <div class="grid2">
@@ -7198,7 +7201,7 @@ function renderResume(co){
     <div class="card">
       <h2>Résumé du compte</h2>
       <div class="resume-edit">
-        <textarea id="resume-textarea">${esc(co.resume)}</textarea>
+        <textarea id="resume-textarea" data-focus-key="resume-edit">${esc(co.resume)}</textarea>
       </div>
       <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px;">
         <button class="btn" onclick="toggleResumeEdit()">Annuler</button>
@@ -7224,7 +7227,7 @@ function renderEntreprise(co){
     <div class="field-row"><label>Groupe (si multi-site)</label>
       <input type="text" value="${esc(co.groupe||'')}" placeholder="Nom du groupe — laisser vide si site unique" onblur="updateCompanyField('${co.id}','groupe',this.value)">
       ${groupesConnus.length ? `
-      <select onchange="if(this.value){updateCompanyField('${co.id}','groupe',this.value);render();}this.selectedIndex=0;" style="margin-top:4px;">
+      <select onchange="if(this.value){updateCompanyField('${co.id}','groupe',this.value);}this.selectedIndex=0;" style="margin-top:4px;">
         <option value="">↳ ou choisir un groupe déjà existant…</option>
         ${groupesConnus.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join('')}
       </select>` : ''}
@@ -7249,7 +7252,7 @@ function renderEntreprise(co){
       </select>
     </div>
     <div class="field-row"><label>Statut</label>
-      <select onchange="updateCompanyField('${co.id}','statutClient',this.value);render()">
+      <select onchange="updateCompanyField('${co.id}','statutClient',this.value)">
         <option value="prospect" ${co.statutClient!=='client'?'selected':''}>Prospect</option>
         <option value="client" ${co.statutClient==='client'?'selected':''}>Client</option>
       </select>
@@ -7351,22 +7354,22 @@ function renderContactForm(cid, k){
   return `
   <div class="inline-form">
     <div class="grid2">
-      <input id="nc-prenom" placeholder="Prénom" value="${esc(contactForm.prenom)}" oninput="contactForm.prenom=this.value">
-      <input id="nc-nom" placeholder="Nom" value="${esc(contactForm.nom)}" oninput="contactForm.nom=this.value">
+      <input id="nc-prenom" placeholder="Prénom" value="${esc(contactForm.prenom)}" oninput="contactForm.prenom=this.value" data-focus-key="nc-prenom">
+      <input id="nc-nom" placeholder="Nom" value="${esc(contactForm.nom)}" oninput="contactForm.nom=this.value" data-focus-key="nc-nom">
     </div>
-    <input id="nc-fonction" placeholder="Fonction" value="${esc(contactForm.fonction)}" oninput="contactForm.fonction=this.value">
+    <input id="nc-fonction" placeholder="Fonction" value="${esc(contactForm.fonction)}" oninput="contactForm.fonction=this.value" data-focus-key="nc-fonction">
     <div class="grid2">
-      <input id="nc-tel" placeholder="Téléphone fixe" value="${esc(contactForm.tel)}" oninput="contactForm.tel=this.value">
-      <input id="nc-mobile" placeholder="Portable" value="${esc(contactForm.mobile)}" oninput="contactForm.mobile=this.value">
+      <input id="nc-tel" placeholder="Téléphone fixe" value="${esc(contactForm.tel)}" oninput="contactForm.tel=this.value" data-focus-key="nc-tel">
+      <input id="nc-mobile" placeholder="Portable" value="${esc(contactForm.mobile)}" oninput="contactForm.mobile=this.value" data-focus-key="nc-mobile">
     </div>
-    <input id="nc-email" placeholder="Email" value="${esc(contactForm.email)}" oninput="contactForm.email=this.value">
+    <input id="nc-email" placeholder="Email" value="${esc(contactForm.email)}" oninput="contactForm.email=this.value" data-focus-key="nc-email">
     <select id="nc-role" onchange="contactForm.role=this.value">
       <option value="decideur" ${contactForm.role==='decideur'?'selected':''}>Décideur</option>
       <option value="prescripteur" ${contactForm.role==='prescripteur'?'selected':''}>Prescripteur</option>
       <option value="utilisateur" ${contactForm.role==='utilisateur'?'selected':''}>Utilisateur</option>
       <option value="autre" ${contactForm.role==='autre'?'selected':''}>Autre</option>
     </select>
-    <textarea id="nc-notes" placeholder="Notes utiles (facultatif)" style="min-height:40px;" oninput="contactForm.notes=this.value">${esc(contactForm.notes)}</textarea>
+    <textarea id="nc-notes" placeholder="Notes utiles (facultatif)" style="min-height:40px;" oninput="contactForm.notes=this.value" data-focus-key="contact-notes">${esc(contactForm.notes)}</textarea>
     <div class="inline-form-actions">
       ${isEdit ? `<button class="btn danger-ghost" onclick="deleteContact('${k.id}')" style="margin-right:auto;">Supprimer</button>` : ''}
       <button class="btn" onclick="${cancelFn}">Annuler</button>
@@ -7470,8 +7473,8 @@ function renderOppForm(co, o){
   return `
   <div class="inline-form">
     <input id="no-intitule" placeholder="Intitulé (ex. Film étirable / film coiffe)" value="${isEdit?esc(o.intitule):''}" />
-    <textarea id="no-besoin" placeholder="Besoin identifié" style="min-height:44px;">${isEdit?esc(o.besoin):''}</textarea>
-    <textarea id="no-solution" placeholder="Solution envisagée" style="min-height:44px;">${isEdit?esc(o.solution):''}</textarea>
+    <textarea id="no-besoin" placeholder="Besoin identifié" style="min-height:44px;" data-focus-key="opp-besoin">${isEdit?esc(o.besoin):''}</textarea>
+    <textarea id="no-solution" placeholder="Solution envisagée" style="min-height:44px;" data-focus-key="opp-solution">${isEdit?esc(o.solution):''}</textarea>
     <div class="grid2">
       <select id="no-potentiel">
         <option value="moyen" ${isEdit&&o.potentiel==='moyen'?'selected':''}>Potentiel moyen</option>
@@ -7489,9 +7492,9 @@ function renderOppForm(co, o){
       </select>
       <input id="no-echeance" type="date" value="${isEdit?o.echeance:addDays(14)}" />
     </div>
-    <textarea id="no-derniere" placeholder="Dernière action" style="min-height:36px;">${isEdit?esc(o.derniereAction):''}</textarea>
-    <textarea id="no-prochaine" placeholder="Prochaine action" style="min-height:36px;">${isEdit?esc(o.prochaineAction):''}</textarea>
-    <textarea id="no-notes" placeholder="Notes (facultatif)" style="min-height:36px;">${isEdit?esc(o.notes||''):''}</textarea>
+    <textarea id="no-derniere" placeholder="Dernière action" style="min-height:36px;" data-focus-key="opp-derniere">${isEdit?esc(o.derniereAction):''}</textarea>
+    <textarea id="no-prochaine" placeholder="Prochaine action" style="min-height:36px;" data-focus-key="opp-prochaine">${isEdit?esc(o.prochaineAction):''}</textarea>
+    <textarea id="no-notes" placeholder="Notes (facultatif)" style="min-height:36px;" data-focus-key="opp-notes">${isEdit?esc(o.notes||''):''}</textarea>
     <div class="inline-form-actions">
       ${isEdit ? `<button class="btn danger-ghost" onclick="deleteOpp('${o.id}')" style="margin-right:auto;">Supprimer</button>` : ''}
       <button class="btn" onclick="${cancelFn}">Annuler</button>
@@ -7857,7 +7860,7 @@ function renderNotes(co, notes){
             <div class="npp-item">
               <img src="${p.dataUrl}" alt="${esc(p.name)}">
               <button onclick="removePendingPhoto('${p.id}')" title="Retirer">✕</button>
-              <input type="text" class="npp-title" placeholder="Titre (ex. façade, tableau élec.)" value="${esc(p.titre||'')}" oninput="updatePendingPhotoTitle('${p.id}', this.value)">
+              <input type="text" class="npp-title" placeholder="Titre (ex. façade, tableau élec.)" value="${esc(p.titre||'')}" oninput="updatePendingPhotoTitle('${p.id}', this.value)" data-focus-key="npp-title-${p.id}">
             </div>`).join('')}
         </div>` : ''}
       <div class="note-add-row">
@@ -9464,7 +9467,7 @@ function renderEditTaskModal(){
       <div class="modal-body">
         <div class="modal-field">
           <label>Intitulé</label>
-          <input id="et-titre" type="text" value="${esc(t.titre)}" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13.5px;">
+          <input id="et-titre" type="text" value="${esc(t.titre)}" data-focus-key="et-titre" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13.5px;">
         </div>
         <div class="modal-field">
           <label>Entreprise</label>
@@ -9497,7 +9500,7 @@ function renderEditTaskModal(){
         </div>
         <div class="modal-field">
           <label>Résultat / commentaire ${t.statut==='terminee'?'':'(si elle est déjà avancée)'}</label>
-          <textarea id="et-resultat" placeholder="Résultat de l'action, notes…">${esc(t.resultat||'')}</textarea>
+          <textarea id="et-resultat" placeholder="Résultat de l'action, notes…" data-focus-key="et-resultat">${esc(t.resultat||'')}</textarea>
         </div>
       </div>
       <div class="modal-foot">
@@ -9558,11 +9561,11 @@ function renderModal(){
       <div class="modal-body">
         <div class="modal-field">
           <label>Résultat de l'action</label>
-          <textarea id="modal-resultat" placeholder="Ex. Échange avec Philippe. Projet toujours pertinent mais production très chargée. Reprendre en septembre."></textarea>
+          <textarea id="modal-resultat" placeholder="Ex. Échange avec Philippe. Projet toujours pertinent mais production très chargée. Reprendre en septembre." data-focus-key="finish-resultat"></textarea>
         </div>
         <div class="modal-field">
           <label>Prochaine action</label>
-          <textarea id="modal-prochaine" placeholder="Ex. Relancer Philippe pour connaître leur visibilité et définir une période de travail."></textarea>
+          <textarea id="modal-prochaine" placeholder="Ex. Relancer Philippe pour connaître leur visibilité et définir une période de travail." data-focus-key="finish-prochaine"></textarea>
         </div>
         <div class="modal-field">
           <label>Échéance de la prochaine action</label>
