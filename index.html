@@ -5763,7 +5763,7 @@ let state = {
 };
 function setNav(n){
   state.activeNav = n;
-  if(n === 'entreprises') state.entreprisesDetailCid = null; // revient à la liste, pas à un détail resté ouvert
+  if(n === 'entreprises') { state.entreprisesDetailCid = null; state.entVisibleCount = 200; } // revient à la liste, pas à un détail resté ouvert
   if(n === 'carte') state.mapView = {...DEFAULT_VIEW}; // repart toujours d'une vue normale, pas du zoom laissé la dernière fois
   render();
 }
@@ -7978,7 +7978,7 @@ function renderEntreprisesPage(){
     ${renderInlineCompanyForm()}
 
     <div class="card ent-filters">
-      <input type="text" placeholder="Rechercher une entreprise…" value="${esc(f.q)}" oninput="state.entFilters.q=this.value;updateEntTableOnly()" data-focus-key="ent-search">
+      <input type="text" placeholder="Rechercher une entreprise…" value="${esc(f.q)}" oninput="state.entFilters.q=this.value;state.entVisibleCount=200;updateEntTableOnly()" data-focus-key="ent-search">
       <select onchange="state.entFilters.secteur=this.value;render()">
         <option value="tous" ${f.secteur==='tous'?'selected':''}>Tous secteurs</option>
         ${secteurs.map(s=>`<option value="${esc(s)}" ${f.secteur===s?'selected':''}>${esc(s)}</option>`).join('')}
@@ -8038,8 +8038,16 @@ function renderEntreprisesPage(){
   </div>`;
 }
 function renderEntTableBody(list){
+  // Même logique que pour la file de tâches (voir renderQueue) : générer d'un coup des milliers
+  // de lignes de tableau devient coûteux à afficher, surtout sur un téléphone moins puissant, et
+  // peut donner l'impression que l'app se bloque au clic suivant pendant que le navigateur est
+  // encore occupé à peindre l'immense tableau précédent. On charge par lots, avec un bouton pour
+  // en afficher davantage à la demande plutôt que tout d'un coup.
+  const visibleCount = state.entVisibleCount || 200;
+  const shown = list.slice(0, visibleCount);
+  const remaining = list.length - shown.length;
   return `
-          ${list.map(c=>`
+          ${shown.map(c=>`
             <tr onclick="viewCompanyInline('${c.id}')">
               <td>
                 <div class="ent-name">${c.statutClient==='client' ? '<span class="ent-client-dot" title="Client">✓</span> ' : ''}${esc(c.nom)}</div>
@@ -8054,7 +8062,8 @@ function renderEntTableBody(list){
               <td><span class="sector-dot" style="background:${PRESTATAIRE_COLORS[c.prestataire]}"></span>${c.prestataire}<div class="ent-region">${esc(c.partenaire)}</div></td>
               <td><button class="btn small" onclick="event.stopPropagation();viewCompanyInline('${c.id}')">Ouvrir →</button></td>
             </tr>`).join('')}
-          ${!list.length ? `<tr><td colspan="9"><div class="empty-queue" style="padding:16px;">Aucune entreprise ne correspond à ces filtres.</div></td></tr>` : ''}`;
+          ${!list.length ? `<tr><td colspan="9"><div class="empty-queue" style="padding:16px;">Aucune entreprise ne correspond à ces filtres.</div></td></tr>` : ''}
+          ${remaining > 0 ? `<tr><td colspan="9" style="text-align:center;padding:12px;"><button class="btn small" onclick="state.entVisibleCount=(state.entVisibleCount||200)+200;updateEntTableOnly()">Afficher ${Math.min(remaining,200)} de plus (${remaining} restantes)</button></td></tr>` : ''}`;
 }
 function updateEntTableOnly(){
   const list = filteredSortedCompanies();
@@ -8121,7 +8130,7 @@ function renderContactsPage(){
     </div>
 
     <div class="card ent-filters">
-      <input type="text" placeholder="Rechercher un contact ou une entreprise…" value="${esc(f.q)}" oninput="state.ctFilters.q=this.value;updateCtTableOnly()" data-focus-key="ct-search">
+      <input type="text" placeholder="Rechercher un contact ou une entreprise…" value="${esc(f.q)}" oninput="state.ctFilters.q=this.value;state.ctVisibleCount=200;updateCtTableOnly()" data-focus-key="ct-search">
       <select onchange="state.ctFilters.role=this.value;render()">
         <option value="tous" ${f.role==='tous'?'selected':''}>Tous rôles</option>
         ${Object.entries(ROLE_LABELS).map(([k,v])=>`<option value="${k}" ${f.role===k?'selected':''}>${v}</option>`).join('')}
@@ -8148,8 +8157,11 @@ function renderContactsPage(){
   </div>`;
 }
 function renderCtTableBody(list){
+  const visibleCount = state.ctVisibleCount || 200;
+  const shown = list.slice(0, visibleCount);
+  const remaining = list.length - shown.length;
   return `
-          ${list.map(k=>`
+          ${shown.map(k=>`
             <tr onclick="editContactFrom('${k.companyId}','${k.id}')">
               <td>
                 <div class="ent-name">${esc(k.prenom)} ${esc(k.nom)}</div>
@@ -8165,7 +8177,8 @@ function renderCtTableBody(list){
               <td>${k.email ? `<a class="ct-link" href="mailto:${esc(k.email)}" onclick="event.stopPropagation()">${esc(k.email)}</a>` : '—'}</td>
               <td><button class="btn small primary" onclick="event.stopPropagation();editContactFrom('${k.companyId}','${k.id}')">✎ Modifier</button></td>
             </tr>`).join('')}
-          ${!list.length ? `<tr><td colspan="7"><div class="empty-queue" style="padding:16px;">Aucun contact ne correspond à ces filtres.</div></td></tr>` : ''}`;
+          ${!list.length ? `<tr><td colspan="7"><div class="empty-queue" style="padding:16px;">Aucun contact ne correspond à ces filtres.</div></td></tr>` : ''}
+          ${remaining > 0 ? `<tr><td colspan="7" style="text-align:center;padding:12px;"><button class="btn small" onclick="state.ctVisibleCount=(state.ctVisibleCount||200)+200;updateCtTableOnly()">Afficher ${Math.min(remaining,200)} de plus (${remaining} restants)</button></td></tr>` : ''}`;
 }
 function updateCtTableOnly(){
   const list = filteredSortedContacts();
