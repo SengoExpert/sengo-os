@@ -10801,9 +10801,35 @@ async function uploadToOneDrive(jsonString, allowInteractive = false){
    sauvegarde en ligne reprend automatiquement, sans que l'utilisateur ait à faire quoi que ce
    soit. */
 const LOCAL_BACKUP_KEY = 'sengo_os_local_backup';
+function buildLightSnapshotForLocalBackup(){
+  // Les photos (encodées en base64 dans dataUrl) peuvent à elles seules représenter plusieurs
+  // méga-octets — largement de quoi saturer le stockage local du navigateur (5 à 10 Mo en
+  // général, moins encore sur certaines configurations Safari), empêchant alors toute nouvelle
+  // sauvegarde locale de secours d'aboutir. Pire : ce même stockage sert aussi à Microsoft pour
+  // conserver la connexion OneDrive — un stockage saturé par nos propres sauvegardes peut donc,
+  // en cascade, perturber la connexion elle-même. On retire donc les photos de CETTE sauvegarde
+  // de secours spécifiquement (la vraie sauvegarde vers OneDrive, elle, les conserve normalement) :
+  // en cas de coupure, on préfère retrouver tout le texte sans les photos plutôt que de risquer de
+  // ne rien pouvoir sauvegarder du tout, texte compris.
+  const snap = buildSnapshot();
+  return {
+    ...snap,
+    notes: snap.notes.map(n => n.photos && n.photos.length ? {...n, photos: n.photos.map(p => ({id:p.id, name:p.name, titre:p.titre}))} : n),
+  };
+}
 function saveLocalBackup(){
-  try{ localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(buildSnapshot())); }
-  catch(e){ console.warn('Sauvegarde locale de secours impossible (espace de stockage plein ?)', e); }
+  try{
+    localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(buildLightSnapshotForLocalBackup()));
+  }catch(e){
+    console.warn('Sauvegarde locale de secours impossible (espace de stockage plein ?)', e);
+    // Une ancienne sauvegarde, plus volumineuse (avant ce correctif, ou avec énormément de
+    // texte), peut occuper à elle seule tout l'espace disponible et empêcher jusqu'à la
+    // connexion OneDrive de fonctionner correctement (Microsoft utilise ce même espace). On la
+    // supprime alors entièrement plutôt que de la laisser bloquer indéfiniment cet espace —
+    // tant pis pour cette sauvegarde de secours précise, la vraie sauvegarde vers OneDrive reste
+    // de toute façon le filet de sécurité principal.
+    try{ localStorage.removeItem(LOCAL_BACKUP_KEY); }catch(e2){}
+  }
 }
 let __appInitialized = false; // devient vrai une fois qu'initOneDrive() a fini de vérifier s'il
                                // existe une sauvegarde locale d'une session précédente à récupérer
