@@ -6958,7 +6958,7 @@ function renderTopbar(){
     <div class="onedrive-wrap">
       ${oneDriveStatus==='connected' ? `
         <button class="onedrive-btn" onclick="reloadFromOneDrive()" title="Recharger les dernières données depuis OneDrive (utile après une modification faite sur un autre appareil)">🔄</button>
-        <button class="onedrive-btn connected ${hasUnsyncedChanges?'unsynced':''}" onclick="${hasUnsyncedChanges?'saveToOneDrive()':'disconnectOneDrive()'}" title="${hasUnsyncedChanges ? '⚠️ Pas de réseau — vos données sont en sécurité sur cet appareil. Cliquer pour réessayer maintenant (une reprise automatique aura de toute façon lieu dès que le réseau revient)' : (oneDriveAccountEmail ? 'Connecté : '+esc(oneDriveAccountEmail)+(oneDriveLastSync?' — dernière synchro '+oneDriveLastSync.toLocaleTimeString('fr-FR'):'') : 'OneDrive connecté')}">☁️${hasUnsyncedChanges?'⚠️':''}</button>
+        <button class="onedrive-btn connected ${hasUnsyncedChanges?'unsynced':''}" onclick="${hasUnsyncedChanges?'saveToOneDrive(true)':'disconnectOneDrive()'}" title="${hasUnsyncedChanges ? '⚠️ Pas de réseau — vos données sont en sécurité sur cet appareil. Cliquer pour réessayer maintenant (une reprise automatique aura de toute façon lieu dès que le réseau revient)' : (oneDriveAccountEmail ? 'Connecté : '+esc(oneDriveAccountEmail)+(oneDriveLastSync?' — dernière synchro '+oneDriveLastSync.toLocaleTimeString('fr-FR'):'') : 'OneDrive connecté')}">☁️${hasUnsyncedChanges?'⚠️':''}</button>
       ` : oneDriveStatus==='connecting' ? `
         <button class="onedrive-btn" disabled title="Connexion à OneDrive en cours…">☁️</button>
       ` : oneDriveStatus==='unavailable' ? `
@@ -10682,7 +10682,7 @@ function withTimeout(promise, ms, message){
   ]);
 }
 let __tokenPromiseInFlight = null;
-async function getGraphToken(){
+async function getGraphToken(allowInteractive = false){
   // Filet de sécurité supplémentaire (en plus de la protection dans saveToOneDrive) : si une
   // demande de jeton est déjà en cours, on la réutilise plutôt que d'en ouvrir une seconde par-
   // dessus — sans ça, chaque appel concurrent pourrait rouvrir sa propre fenêtre de connexion.
@@ -10698,10 +10698,18 @@ async function getGraphToken(){
       );
       return resp.accessToken;
     }catch(e){
-      // La fenêtre pop-up de connexion peut rester bloquée sans jamais revenir, en particulier
-      // dans une app installée sur l'écran d'accueil ("standalone") sur mobile — sans limite de
-      // temps ici, un clic sur "Enregistrer" pouvait alors sembler "ne rien faire" indéfiniment,
-      // sans aucun message d'erreur pour comprendre pourquoi.
+      // Important : Safari (et la plupart des navigateurs) bloque toute fenêtre pop-up qui ne
+      // s'ouvre pas en réaction immédiate à un clic — or c'est précisément le cas d'une
+      // sauvegarde automatique différée de 2 secondes après une modification. Y tenter quand
+      // même acquireTokenPopup() ici échouait alors silencieusement (fenêtre bloquée sans le
+      // moindre message), donnant l'impression que "tout s'enregistre" alors que rien ne partait
+      // réellement vers OneDrive dès que le jeton d'accès expirait (au bout d'environ 1 heure
+      // d'utilisation). On ne tente donc cette fenêtre que lors d'une action explicite (clic sur
+      // ☁️ ou sur "Enregistrer maintenant") — sinon on prévient clairement qu'une reconnexion
+      // manuelle est nécessaire, plutôt que d'échouer sans aucune explication.
+      if(!allowInteractive){
+        throw new Error('Session OneDrive expirée — cliquez sur ☁️ pour vous reconnecter.');
+      }
       try{
         const resp = await withTimeout(
           // Important : sans préciser "account" ET "loginHint" ici, la fenêtre de connexion peut
@@ -10726,8 +10734,8 @@ async function getGraphToken(){
   }
 }
 
-async function downloadFromOneDrive(){
-  const token = await getGraphToken();
+async function downloadFromOneDrive(allowInteractive = false){
+  const token = await getGraphToken(allowInteractive);
   // cache:'no-store' + paramètre anti-cache : sans ça, le navigateur (surtout Safari mobile)
   // peut renvoyer une ancienne version mise en cache au lieu d'aller vérifier sur le serveur —
   // ce qui donnait l'impression qu'une modification faite sur un autre appareil "ne remontait
@@ -10741,8 +10749,8 @@ async function downloadFromOneDrive(){
   return await res.json();
 }
 
-async function uploadToOneDrive(jsonString){
-  const token = await getGraphToken();
+async function uploadToOneDrive(jsonString, allowInteractive = false){
+  const token = await getGraphToken(allowInteractive);
   const createRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/special/approot:/${ONEDRIVE_FILENAME}:/createUploadSession`, {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -10838,7 +10846,7 @@ function updateOneDriveIconOnly(){
   if(!btn) return;
   btn.classList.toggle('unsynced', hasUnsyncedChanges);
   btn.textContent = hasUnsyncedChanges ? '☁️⚠️' : '☁️';
-  btn.setAttribute('onclick', hasUnsyncedChanges ? 'saveToOneDrive()' : 'disconnectOneDrive()');
+  btn.setAttribute('onclick', hasUnsyncedChanges ? 'saveToOneDrive(true)' : 'disconnectOneDrive()');
   btn.title = hasUnsyncedChanges
     ? '⚠️ Pas de réseau — vos données sont en sécurité sur cet appareil. Cliquer pour réessayer maintenant (une reprise automatique aura de toute façon lieu dès que le réseau revient)'
     : (oneDriveAccountEmail ? 'Connecté : '+oneDriveAccountEmail+(oneDriveLastSync?' — dernière synchro '+oneDriveLastSync.toLocaleTimeString('fr-FR'):'') : 'OneDrive connecté');
@@ -10846,7 +10854,7 @@ function updateOneDriveIconOnly(){
 
 let __saveInFlight = false;
 let __saveQueued = false;
-async function saveToOneDrive(){
+async function saveToOneDrive(allowInteractive = false){
   // "connecting" est accepté en plus de "connected" : c'est l'état transitoire utilisé par
   // reloadFromOneDrive() pour son propre affichage pendant qu'il délègue ici tout le travail —
   // sans ça, cette fonction se bloquait elle-même silencieusement dès qu'appelée depuis là.
@@ -10870,10 +10878,10 @@ async function saveToOneDrive(){
     // lors d'un rechargement explicite ou de la vérification toutes les 20 secondes. Cette même
     // fonction sert donc désormais de point unique de synchronisation, appelé de partout.
     const before = snapshotDataOnly(buildSnapshot());
-    const remoteSnap = await downloadFromOneDrive();
+    const remoteSnap = await downloadFromOneDrive(allowInteractive);
     if(remoteSnap) mergeSnapshot(remoteSnap);
     const after = snapshotDataOnly(buildSnapshot());
-    await uploadToOneDrive(JSON.stringify(buildSnapshot()));
+    await uploadToOneDrive(JSON.stringify(buildSnapshot()), allowInteractive);
     oneDriveLastSync = new Date();
     hasUnsyncedChanges = false;
     if(before !== after){
@@ -10897,8 +10905,18 @@ async function saveToOneDrive(){
     console.error('Sauvegarde OneDrive échouée', e);
     oneDriveError = e.message || String(e);
     hasUnsyncedChanges = true;
-    registerOnlineRetry();
-    toast('⚠️ Pas de réseau — vos données sont gardées en sécurité sur cet appareil, l\'enregistrement en ligne reprendra automatiquement dès que la connexion reviendra.', 4500);
+    const isSessionExpired = oneDriveError.includes('Session OneDrive expirée');
+    if(isSessionExpired){
+      // Une vraie coupure réseau finit par se rétablir toute seule (d'où registerOnlineRetry
+      // ci-dessous) — une session expirée, elle, ne se résout jamais toute seule : l'évènement
+      // "online" du navigateur ne se déclenchera pas puisque le réseau, lui, fonctionne très
+      // bien. Seul un clic explicite sur ☁️ peut relancer la fenêtre de connexion (voir
+      // getGraphToken), donc inutile d'attendre un retour réseau qui n'arrivera jamais.
+      toast('⚠️ ' + oneDriveError, 6000);
+    } else {
+      registerOnlineRetry();
+      toast('⚠️ Pas de réseau — vos données sont gardées en sécurité sur cet appareil, l\'enregistrement en ligne reprendra automatiquement dès que la connexion reviendra.', 4500);
+    }
     // Important : ne jamais reconstruire toute la page ici (voir updateOneDriveIconOnly) —
     // ça referme brutalement tout menu déroulant ouvert ou fait disparaître le clavier d'une
     // saisie en cours, et surtout ça relance scheduleAutoSave() en boucle toutes les 2 secondes
@@ -10933,7 +10951,7 @@ function saveNow(){
   __autoSaveTimer = null;
   const btn = document.querySelector('.brand-save-btn');
   if(btn){ btn.classList.add('saving'); btn.disabled = true; }
-  saveToOneDrive().finally(() => {
+  saveToOneDrive(true).finally(() => {
     // On recherche le bouton à nouveau plutôt que de garder l'ancienne référence : un rendu a pu
     // le recréer entre-temps (ex. si la fusion a rapatrié une modification faite ailleurs).
     const current = document.querySelector('.brand-save-btn');
