@@ -6369,12 +6369,12 @@ function renderAddrLookupResultsOnly(target){
     <div class="addr-lookup-dropdown">
       ${addrLookup.results.map((c,ci) => `
         <div class="addr-lookup-item">
-          <button type="button" class="addr-lookup-row" onclick="${c.etablissements.length>1 ? `toggleAddrLookupExpand(${ci})` : `applyAddrSuggestion('${target}', ${ci}, 0)`}">
+          <button type="button" class="addr-lookup-row" onmousedown="event.preventDefault();${c.etablissements.length>1 ? `toggleAddrLookupExpand(${ci})` : `applyAddrSuggestion('${target}', ${ci}, 0)`}">
             <span class="addr-lookup-name">${esc(c.nom)}${c.etablissements.length>1 ? ` <span class="addr-lookup-badge">${c.etablissements.length} établissements</span>` : ''}</span>
             <span class="addr-lookup-addr">${esc(c.etablissements[0].rue)}, ${esc(c.etablissements[0].cp)} ${esc(c.etablissements[0].ville)}</span>
           </button>
           ${c.etablissements.length>1 && addrLookupExpanded===ci ? c.etablissements.map((e,ei)=>`
-          <button type="button" class="addr-lookup-row addr-lookup-sub" onclick="applyAddrSuggestion('${target}', ${ci}, ${ei})">
+          <button type="button" class="addr-lookup-row addr-lookup-sub" onmousedown="event.preventDefault();applyAddrSuggestion('${target}', ${ci}, ${ei})">
             <span class="addr-lookup-name">${e.siege ? 'Siège' : 'Établissement'}${e.siret ? ' · <span class=\"mono\">'+esc(e.siret)+'</span>' : ''}</span>
             <span class="addr-lookup-addr">${esc(e.rue)}, ${esc(e.cp)} ${esc(e.ville)}</span>
           </button>`).join('') : ''}
