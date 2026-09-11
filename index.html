@@ -272,6 +272,17 @@
   .rdv-body{flex:1;min-width:0;}
   .rdv-company{font-weight:600;font-size:13px;}
   .rdv-title{font-size:12.5px;color:var(--ink-700);}
+  .company-picker{position:relative;}
+  .company-picker-input{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13.5px;box-sizing:border-box;}
+  .company-picker-dropdown{
+    position:absolute;top:calc(100% + 2px);left:0;right:0;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);
+    max-height:220px;overflow:auto;z-index:60;
+  }
+  .cp-item{padding:8px 12px;font-size:13px;cursor:pointer;}
+  .cp-item:hover{background:var(--panel-2);}
+  .cp-ville{color:var(--ink-500);font-size:11.5px;}
+  .cp-empty{padding:8px 12px;font-size:12.5px;color:var(--ink-500);font-style:italic;}
 
   /* ===== Cockpit (right) ===== */
   .cockpit{display:flex;flex-direction:column;gap:14px;min-width:0;}
@@ -5890,7 +5901,8 @@ function saveEditTask(){
   if(!t) return;
   const titre = document.getElementById('et-titre').value.trim();
   if(!titre){ toast('Le titre est requis.'); return; }
-  const companyId = document.getElementById('et-entreprise').value;
+  const companyId = document.getElementById('cp-value-et-entreprise').value;
+  if(!companyId){ toast('Choisissez une entreprise dans la liste proposée.'); return; }
   const echeance = document.getElementById('et-echeance').value || t.echeance;
   const heure = document.getElementById('et-heure').value || '';
   const priorite = document.getElementById('et-priorite').value;
@@ -6065,6 +6077,20 @@ function saveNotePhotoTitle(photoId, value){
 function addNote(cid){
   const val = pendingNote.text.trim();
   if(!val && !pendingNote.photos.length){ toast('Écrivez un texte ou ajoutez au moins une photo.'); return false; }
+  // Si une note du même type existe déjà aujourd'hui pour cette entreprise, on y ajoute le
+  // nouveau texte plutôt que d'en créer une distincte — pour ne pas fragmenter en plusieurs
+  // entrées une même journée de suivi écrite en plusieurs fois. Le type doit correspondre : un
+  // choix délibéré d'un autre type (ex. "Visite" après une "Note libre") reste volontairement
+  // une entrée séparée, puisque ce changement de type est lui-même un signal explicite.
+  const existing = DB.notes.find(n => n.companyId===cid && n.date===todayStr && n.type===pendingNote.type);
+  if(existing){
+    if(val) existing.texte = existing.texte ? existing.texte + '\n\n' + val : val;
+    if(pendingNote.photos.length) existing.photos = [...(existing.photos||[]), ...pendingNote.photos];
+    resetPendingNote();
+    toast('Note du jour complétée.');
+    render();
+    return true;
+  }
   DB.notes.push({
     id: gen_id_client('n'), companyId:cid, contactId:null, opportunityId:null,
     date: todayStr, texte: val, type: pendingNote.type, photos: pendingNote.photos
@@ -6350,18 +6376,85 @@ function updateAddrLookupResultsOnly(target){
   const el = document.getElementById('addr-lookup-results-'+target);
   if(el) el.innerHTML = renderAddrLookupResultsOnly(target);
 }
+
+/* ---------------------------- SÉLECTEUR D'ENTREPRISE AVEC RECHERCHE ----------------------------
+   Remplace un long menu déroulant (peu pratique avec beaucoup d'entreprises) par un champ texte
+   qui filtre la liste au fur et à mesure de la frappe. Réutilisable partout où il faut choisir
+   une entreprise (modification de tâche, nouveau rendez-vous, validation d'import .ics).
+   La valeur retenue est stockée dans un champ caché, à lire au moment de l'enregistrement. */
+function renderCompanyPicker(instanceId, currentCompanyId, onSelectFn){
+  const co = currentCompanyId ? byId(DB.companies, currentCompanyId) : null;
+  return `
+  <div class="company-picker" id="cp-wrap-${instanceId}">
+    <input type="text" class="company-picker-input" id="cp-input-${instanceId}" autocomplete="off"
+      placeholder="Taper pour chercher une entreprise…" value="${co ? esc(co.nom) : ''}"
+      oninput="onCompanyPickerInput('${instanceId}', this.value, '${onSelectFn||''}')"
+      onfocus="onCompanyPickerFocus('${instanceId}', '${onSelectFn||''}')"
+      onblur="onCompanyPickerBlur('${instanceId}')">
+    <input type="hidden" id="cp-value-${instanceId}" value="${currentCompanyId||''}">
+  </div>`;
+}
+function onCompanyPickerFocus(instanceId, onSelectFn){
+  updateCompanyPickerResults(instanceId, document.getElementById('cp-input-'+instanceId).value, onSelectFn);
+}
+function onCompanyPickerInput(instanceId, value, onSelectFn){
+  // Si l'utilisateur efface/modifie le texte librement, la sélection précédente n'est plus
+  // valable tant qu'il n'a pas re-choisi une entreprise dans la liste.
+  const hidden = document.getElementById('cp-value-'+instanceId);
+  if(hidden) hidden.value = '';
+  updateCompanyPickerResults(instanceId, value, onSelectFn);
+}
+function updateCompanyPickerResults(instanceId, query, onSelectFn){
+  const q = query.trim().toLowerCase();
+  const matches = DB.companies
+    .filter(c => !q || c.nom.toLowerCase().includes(q))
+    .sort((a,b)=>a.nom.localeCompare(b.nom,'fr'))
+    .slice(0, 30);
+  const wrap = document.getElementById('cp-wrap-'+instanceId);
+  if(!wrap) return;
+  const existing = document.getElementById('cp-dropdown-'+instanceId);
+  const html = `
+    <div class="company-picker-dropdown" id="cp-dropdown-${instanceId}">
+      ${matches.length ? matches.map(c=>`
+        <div class="cp-item" onmousedown="event.preventDefault();selectCompanyPickerItem('${instanceId}','${c.id}','${onSelectFn||''}')">
+          ${esc(c.nom)}${c.ville?` <span class="cp-ville">— ${esc(c.ville)}</span>`:''}
+        </div>`).join('') : `<div class="cp-empty">Aucune entreprise trouvée</div>`}
+    </div>`;
+  if(existing) existing.outerHTML = html; else wrap.insertAdjacentHTML('beforeend', html);
+}
+function selectCompanyPickerItem(instanceId, companyId, onSelectFn){
+  const co = byId(DB.companies, companyId);
+  const input = document.getElementById('cp-input-'+instanceId);
+  const hidden = document.getElementById('cp-value-'+instanceId);
+  if(input) input.value = co ? co.nom : '';
+  if(hidden) hidden.value = companyId;
+  closeCompanyPickerDropdown(instanceId);
+  if(onSelectFn && typeof window[onSelectFn]==='function') window[onSelectFn](instanceId, companyId);
+}
+function closeCompanyPickerDropdown(instanceId){
+  const dropdown = document.getElementById('cp-dropdown-'+instanceId);
+  if(dropdown) dropdown.remove();
+}
+function onCompanyPickerBlur(instanceId){
+  // Léger différé : un clic sur un élément de la liste (onmousedown) doit avoir le temps de
+  // s'exécuter avant que la perte de focus (onblur) ne referme le menu.
+  setTimeout(() => closeCompanyPickerDropdown(instanceId), 200);
+}
+
 function updatePrestataire(cid, value){
+  if(__inRenderCycle) return; // voir updateCompanyField : évite un déclenchement fantôme
   const co = byId(DB.companies, cid);
   co.prestataire = value;
   co.partenaire = value === 'SENGO EXPERT' ? 'SENGO Expert direct' : value;
   toast('Prestataire mis à jour : ' + value);
-  render();
+  setTimeout(render, 0);
 }
 function updatePotentiel(cid, value){
+  if(__inRenderCycle) return; // voir updateCompanyField : évite un déclenchement fantôme
   const co = byId(DB.companies, cid);
   co.potentiel = value;
   toast('Potentiel mis à jour : ' + value);
-  render();
+  setTimeout(render, 0);
 }
 function toggleStatutClient(cid){
   const co = byId(DB.companies, cid);
@@ -6640,10 +6733,11 @@ function performMergeCompanies(sourceId, targetId){
 }
 
 function changeOppStatus(oid, value){
+  if(__inRenderCycle) return; // voir updateCompanyField : évite un déclenchement fantôme
   const opp = byId(DB.opportunities, oid);
   opp.statut = value;
   toast(`Statut mis à jour : ${STATUS_LABELS[value]}`);
-  render();
+  setTimeout(render, 0);
 }
 
 let addingContactFor = null;
@@ -7103,7 +7197,7 @@ function renderEntreprise(co){
     <div class="field-row"><label>Groupe (si multi-site)</label>
       <input type="text" value="${esc(co.groupe||'')}" placeholder="Nom du groupe — laisser vide si site unique" onblur="updateCompanyField('${co.id}','groupe',this.value)">
       ${groupesConnus.length ? `
-      <select onchange="if(this.value){updateCompanyField('${co.id}','groupe',this.value);render();}this.selectedIndex=0;" style="margin-top:4px;">
+      <select onchange="if(this.value){updateCompanyField('${co.id}','groupe',this.value);}this.selectedIndex=0;" style="margin-top:4px;">
         <option value="">↳ ou choisir un groupe déjà existant…</option>
         ${groupesConnus.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join('')}
       </select>` : ''}
@@ -7128,7 +7222,7 @@ function renderEntreprise(co){
       </select>
     </div>
     <div class="field-row"><label>Statut</label>
-      <select onchange="updateCompanyField('${co.id}','statutClient',this.value);render()">
+      <select onchange="updateCompanyField('${co.id}','statutClient',this.value)">
         <option value="prospect" ${co.statutClient!=='client'?'selected':''}>Prospect</option>
         <option value="client" ${co.statutClient==='client'?'selected':''}>Client</option>
       </select>
@@ -8343,7 +8437,7 @@ function toggleAddRdv(){
   render();
 }
 function submitRdv(){
-  const cid = document.getElementById('rdv-entreprise').value;
+  const cid = document.getElementById('cp-value-rdv-entreprise').value;
   const titre = document.getElementById('rdv-titre').value.trim();
   const echeance = document.getElementById('rdv-date').value || todayStr;
   const heure = document.getElementById('rdv-heure').value;
@@ -8423,16 +8517,8 @@ async function importIcsFile(input){
     // le passé lointain (souvent des évènements très anciens conservés dans un vieil agenda).
     const cutoff = addDays(-30);
     const relevant = events.filter(e => e.date >= cutoff).slice(0, 200);
-    const companyByKey = new Map();
-    DB.companies.forEach(co => { const k = normKeyLoose(co.nom); if(k) companyByKey.set(k, co); });
     icsCandidates = relevant.map((e,i) => {
-      const titleKey = normKeyLoose(e.summary);
-      let matched = null;
-      if(titleKey){
-        for(const [key, co] of companyByKey){
-          if(titleKey.includes(key) || key.includes(titleKey)){ matched = co; break; }
-        }
-      }
+      const matched = findBestCompanyMatch(e.summary);
       return { id:'icsc'+i, summary:e.summary, date:e.date, heure:e.heure, companyId: matched?matched.id:'', include:true };
     });
     icsReviewOpen = true;
@@ -8455,6 +8541,9 @@ function toggleIcsCandidateInclude(id){
 function setIcsCandidateCompany(id, companyId){
   const c = icsCandidates.find(x=>x.id===id);
   if(c) c.companyId = companyId;
+}
+function onIcsPickerSelect(instanceId, companyId){
+  setIcsCandidateCompany(instanceId.replace(/^ics-/, ''), companyId);
 }
 function confirmIcsImport(){
   const toImport = icsCandidates.filter(c => c.include && c.companyId);
@@ -8496,10 +8585,7 @@ function renderIcsReview(){
             <div class="onc-body">
               <div class="onc-title">${esc(c.summary || '(sans titre)')}</div>
               <div class="onc-preview">${fmtDate(c.date)}${c.heure?' à '+esc(c.heure):' (toute la journée)'}</div>
-              <select onchange="setIcsCandidateCompany('${c.id}', this.value)" ${!c.include?'disabled':''}>
-                <option value="">— Choisir l'entreprise —</option>
-                ${DB.companies.slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(co=>`<option value="${co.id}" ${c.companyId===co.id?'selected':''}>${esc(co.nom)}</option>`).join('')}
-              </select>
+              ${c.include ? renderCompanyPicker('ics-'+c.id, c.companyId, 'onIcsPickerSelect') : ''}
             </div>
           </div>`).join('')}
       </div>
@@ -8554,10 +8640,7 @@ function renderAgendaPage(){
     </div>
     ${addingRdvOpen ? `
     <div class="inline-form">
-      <select id="rdv-entreprise">
-        <option value="">— Choisir l'entreprise —</option>
-        ${DB.companies.slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(c=>`<option value="${c.id}">${esc(c.nom)}${c.ville?' — '+esc(c.ville):''}</option>`).join('')}
-      </select>
+      ${renderCompanyPicker('rdv-entreprise', '', '')}
       <input id="rdv-titre" placeholder="Objet du rendez-vous">
       <div class="grid2">
         <input id="rdv-date" type="date" value="${todayStr}">
@@ -9345,9 +9428,7 @@ function renderEditTaskModal(){
         </div>
         <div class="modal-field">
           <label>Entreprise</label>
-          <select id="et-entreprise" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13.5px;">
-            ${DB.companies.slice().sort((a,b)=>a.nom.localeCompare(b.nom,'fr')).map(c=>`<option value="${c.id}" ${c.id===t.companyId?'selected':''}>${esc(c.nom)}${c.ville?' — '+esc(c.ville):''}</option>`).join('')}
-          </select>
+          ${renderCompanyPicker('et-entreprise', t.companyId, '')}
         </div>
         <div class="grid2">
           <div class="modal-field">
@@ -10235,6 +10316,35 @@ function parseVCF(text){
 function normKeyLoose(s){
   return (s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]/g,'');
 }
+// Découpe en mots significatifs (3 lettres ou plus), en conservant les séparations — contrairement
+// à normKeyLoose() qui les supprime entièrement, rendant impossible toute comparaison mot à mot.
+function normWordsLoose(s){
+  return (s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]+/g,' ').trim().split(/\s+/).filter(w=>w.length>=3);
+}
+// Cherche l'entreprise dont le nom partage le plus de mots avec le texte donné (titre de rendez-
+// vous, titre de page OneNote...). Bien plus robuste qu'une simple inclusion de texte : elle
+// continue de fonctionner même si d'autres mots ("RDV chez...", "- suivi commercial") s'intercalent
+// entre les mots du nom de l'entreprise, ce que la recherche par sous-chaîne ne supportait pas.
+function findBestCompanyMatch(titleRaw){
+  const titleWords = new Set(normWordsLoose(titleRaw));
+  if(!titleWords.size) return null;
+  let best = null, bestScore = 0;
+  DB.companies.forEach(co => {
+    const nameWords = normWordsLoose(co.nom);
+    if(!nameWords.length) return;
+    const matchedCount = nameWords.filter(w => titleWords.has(w)).length;
+    if(matchedCount === 0) return;
+    // Le score favorise à la fois le nombre absolu de mots retrouvés (un nom de 3 mots
+    // entièrement retrouvé est un signal plus fort qu'un seul mot isolé) et la proportion du nom
+    // couverte (pour départager plusieurs établissements d'un même groupe, ex. "X Carrières" vs
+    // "X Négoce" quand le titre mentionne "Carrières").
+    const score = matchedCount + (matchedCount / nameWords.length);
+    if(score > bestScore){ bestScore = score; best = co; }
+  });
+  // Seuil minimum pour éviter qu'un unique mot très court ou très courant ne déclenche une
+  // correspondance hasardeuse sur un nom d'entreprise long et sans rapport réel.
+  return bestScore >= 1.5 ? best : null;
+}
 function normPhoneLoose(s){
   const digits = (s||'').replace(/\D/g,'');
   return digits.slice(-9); // les 9 derniers chiffres suffisent à identifier un même numéro, indicatif ou pas
@@ -10409,16 +10519,8 @@ async function importOneNoteDocx(input){
     }
 
     // Correspondance automatique avec les entreprises déjà connues, à partir du titre de page
-    const companyByKey = new Map();
-    DB.companies.forEach(co => { const k = normKeyLoose(co.nom); if(k) companyByKey.set(k, co); });
     oneNoteCandidates = candidates.map((c, i) => {
-      const titleKey = normKeyLoose(c.title);
-      let matched = null;
-      if(titleKey){
-        for(const [key, co] of companyByKey){
-          if(titleKey.includes(key) || key.includes(titleKey)){ matched = co; break; }
-        }
-      }
+      const matched = findBestCompanyMatch(c.title);
       return { id: 'onc'+i, title: c.title, content: c.content, companyId: matched ? matched.id : '', include: true };
     });
     oneNoteReviewOpen = true;
