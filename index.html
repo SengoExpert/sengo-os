@@ -6452,19 +6452,17 @@ function onCompanyPickerBlur(instanceId){
 }
 
 function updatePrestataire(cid, value){
-  if(__inRenderCycle) return; // voir updateCompanyField : évite un déclenchement fantôme
   const co = byId(DB.companies, cid);
   co.prestataire = value;
   co.partenaire = value === 'SENGO EXPERT' ? 'SENGO Expert direct' : value;
   toast('Prestataire mis à jour : ' + value);
-  setTimeout(render, 0);
+  render();
 }
 function updatePotentiel(cid, value){
-  if(__inRenderCycle) return; // voir updateCompanyField : évite un déclenchement fantôme
   const co = byId(DB.companies, cid);
   co.potentiel = value;
   toast('Potentiel mis à jour : ' + value);
-  setTimeout(render, 0);
+  render();
 }
 function toggleStatutClient(cid){
   const co = byId(DB.companies, cid);
@@ -6743,11 +6741,10 @@ function performMergeCompanies(sourceId, targetId){
 }
 
 function changeOppStatus(oid, value){
-  if(__inRenderCycle) return; // voir updateCompanyField : évite un déclenchement fantôme
   const opp = byId(DB.opportunities, oid);
   opp.statut = value;
   toast(`Statut mis à jour : ${STATUS_LABELS[value]}`);
-  setTimeout(render, 0);
+  render();
 }
 
 let addingContactFor = null;
@@ -7218,7 +7215,7 @@ function renderEntreprise(co){
     <div class="field-row"><label>Groupe (si multi-site)</label>
       <input type="text" value="${esc(co.groupe||'')}" placeholder="Nom du groupe — laisser vide si site unique" onblur="updateCompanyField('${co.id}','groupe',this.value)">
       ${groupesConnus.length ? `
-      <select onchange="if(this.value){updateCompanyField('${co.id}','groupe',this.value);}this.selectedIndex=0;" style="margin-top:4px;">
+      <select onchange="if(this.value){updateCompanyField('${co.id}','groupe',this.value);render();}this.selectedIndex=0;" style="margin-top:4px;">
         <option value="">↳ ou choisir un groupe déjà existant…</option>
         ${groupesConnus.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join('')}
       </select>` : ''}
@@ -7243,7 +7240,7 @@ function renderEntreprise(co){
       </select>
     </div>
     <div class="field-row"><label>Statut</label>
-      <select onchange="updateCompanyField('${co.id}','statutClient',this.value)">
+      <select onchange="updateCompanyField('${co.id}','statutClient',this.value);render()">
         <option value="prospect" ${co.statutClient!=='client'?'selected':''}>Prospect</option>
         <option value="client" ${co.statutClient==='client'?'selected':''}>Client</option>
       </select>
