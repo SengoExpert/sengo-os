@@ -6219,6 +6219,10 @@ function toggleResumeEdit(){
   state.editingResume = !state.editingResume;
   render();
 }
+function clearResumeField(){
+  const el = document.getElementById('resume-textarea');
+  if(el){ el.value = ''; el.focus(); }
+}
 function saveResume(cid){
   const co = byId(DB.companies, cid);
   co.resume = document.getElementById('resume-textarea').value;
@@ -7203,9 +7207,12 @@ function renderResume(co){
       <div class="resume-edit">
         <textarea id="resume-textarea" data-focus-key="resume-edit">${esc(co.resume)}</textarea>
       </div>
-      <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px;">
-        <button class="btn" onclick="toggleResumeEdit()">Annuler</button>
-        <button class="btn primary" onclick="saveResume('${co.id}')">Enregistrer</button>
+      <div style="display:flex;justify-content:space-between;gap:6px;margin-top:8px;">
+        <button class="btn ghost small" onclick="clearResumeField()" title="Vide le champ d'un coup, sans dépendre du raccourci clavier « tout sélectionner »">🗑 Vider</button>
+        <div style="display:flex;gap:6px;">
+          <button class="btn" onclick="toggleResumeEdit()">Annuler</button>
+          <button class="btn primary" onclick="saveResume('${co.id}')">Enregistrer</button>
+        </div>
       </div>
     </div>`;
   }
