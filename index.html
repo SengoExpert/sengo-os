@@ -6341,10 +6341,18 @@ function applyAddrSuggestion(target, ci, ei){
   } else {
     const co = byId(DB.companies, target);
     if(co){
-      updateCompanyField(target, 'rue', e.rue);
-      updateCompanyField(target, 'codePostal', e.cp);
-      updateCompanyField(target, 'ville', e.ville);
-      if(!co.activite && c.naf) updateCompanyField(target, 'activite', c.naf);
+      // Modification directe plutôt que updateCompanyField() : cette dernière protège contre un
+      // déclenchement "fantôme" causé par la suppression d'un champ de saisie en cours d'édition
+      // (voir son propre commentaire) — une protection utile pour un champ que l'utilisateur est
+      // en train de taper au clavier, mais sans objet ici, puisqu'il s'agit d'une action ponctuelle
+      // déclenchée par un clic sur une suggestion, jamais d'un champ en cours de frappe. Cette
+      // protection s'est avérée pouvoir, dans certains cas, empêcher à tort la mise à jour de
+      // s'appliquer.
+      co.rue = e.rue;
+      co.codePostal = e.cp;
+      co.ville = e.ville;
+      syncAdresseFromParts(co);
+      if(!co.activite && c.naf) co.activite = c.naf;
     }
   }
   toast('Adresse complétée : ' + [e.cp, e.ville].filter(Boolean).join(' ') + '.');
