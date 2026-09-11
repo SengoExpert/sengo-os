@@ -5775,7 +5775,17 @@ function viewCompanyInline(cid){
 }
 
 /* ---------------------------- HELPERS ---------------------------- */
-const byId = (arr,id) => arr.find(x=>x.id===id);
+const byId = (arr,id) => {
+  // Cas particulier pour DB.companies : c'est de loin le tableau le plus consulté (une recherche
+  // par tâche, par contact, par opportunité, par note...), et une recherche linéaire classique
+  // devient très coûteuse dès que le nombre d'entreprises ET de tâches grandit (des centaines de
+  // milliers de comparaisons à chaque affichage de la page Aujourd'hui). Cette table de
+  // correspondance, reconstruite une seule fois par rendu (voir render()), ramène chaque
+  // recherche individuelle à un coût constant.
+  if(arr === DB.companies && __companiesByIdMap) return __companiesByIdMap.get(id);
+  return arr.find(x=>x.id===id);
+};
+let __companiesByIdMap = null;
 function recordDeletion(type, id){
   DB.tombstones.push({id, type, deletedAt: Date.now()});
 }
@@ -7011,11 +7021,22 @@ function renderQueue(){
     </div>`;
   };
 
-  const group = (title, cls, arr, kind) => `
+  const group = (title, cls, arr, kind) => {
+    // Plafond volontaire : au-delà de quelques dizaines, generer une carte complète par tâche
+    // devient coûteux (des milliers de tâches en retard après plusieurs mois d'usage réel), sans
+    // vraiment aider au quotidien — les plus urgentes (déjà triées en premier) suffisent pour
+    // savoir par où commencer. Le reste reste consultable via la page Tâches, pensée pour
+    // parcourir de longues listes.
+    const CAP = 50;
+    const shown = arr.slice(0, CAP);
+    const remaining = arr.length - shown.length;
+    return `
     <div class="queue-group ${cls}">
       <h3>${title} <span class="count">${arr.length}</span></h3>
-      ${arr.length ? arr.map(t=>card(t,kind)).join('') : `<div class="empty-queue">Rien ici.</div>`}
+      ${shown.length ? shown.map(t=>card(t,kind)).join('') : `<div class="empty-queue">Rien ici.</div>`}
+      ${remaining > 0 ? `<div class="empty-queue" style="text-align:center;">+ ${remaining} autre(s) — <a href="#" onclick="state.activeNav='taches';render();return false;" style="color:var(--brand-orange-dark);font-weight:600;">voir dans Tâches →</a></div>` : ''}
     </div>`;
+  };
 
   return `
   <div class="queue">
@@ -9617,6 +9638,7 @@ function stampUpdatedTimestamps(){
 }
 
 function render(){
+  __companiesByIdMap = new Map(DB.companies.map(c=>[c.id,c]));
   stampUpdatedTimestamps();
   scheduleLocalBackup(); // filet de sécurité local, avec un délai bien plus court que la
                           // sauvegarde réseau — pour ne perdre une saisie que si l'appli est
@@ -9781,6 +9803,11 @@ function onOverlayPointerUp(e, closeFn){
    venir) — plutôt qu'une entreprise fixée en dur, qui n'a plus de sens une fois de vraies
    données chargées. */
 function computeStartingCompanyId(){
+  // Reconstruite ici aussi (et pas seulement dans render()) : cette fonction est appelée depuis
+  // plusieurs endroits (démarrage, suppression d'entreprise, reconnexion OneDrive...), parfois
+  // avant qu'un rendu n'ait eu l'occasion de la construire — sans ça, ce premier appel retombait
+  // sur la recherche linéaire coûteuse qu'elle est censée éviter.
+  __companiesByIdMap = new Map(DB.companies.map(c=>[c.id,c]));
   const open = DB.tasks.filter(t=>t.statut==='ouverte' && matchesPrestataireFilter(byId(DB.companies, t.companyId)));
   // Même ordre que celui affiché dans la file de travail (voir renderQueue) : Aujourd'hui en
   // premier, puis le retard du plus proche au plus ancien, puis à venir — pour que l'entreprise
@@ -11139,6 +11166,7 @@ async function initOneDrive(){
 // ne dépend jamais du réseau. La connexion OneDrive se poursuit ensuite en tâche de fond et
 // rafraîchit l'écran une fois prête (connectée, indisponible, ou en erreur).
 function startApp(){
+  __companiesByIdMap = new Map(DB.companies.map(c=>[c.id,c]));
   state.selectedCompanyId = computeStartingCompanyId();
   render();
   initOneDrive();
