@@ -6985,7 +6985,7 @@ function renderTopbar(){
 }
 
 function renderQueue(){
-  const open = DB.tasks.filter(t=>t.statut==='ouverte' && matchesPrestataireFilter(byId(DB.companies, t.companyId)));
+  const open = DB.tasks.filter(t=>t.statut==='ouverte' && byId(DB.companies, t.companyId) && matchesPrestataireFilter(byId(DB.companies, t.companyId)));
   // De la plus proche à la plus éloignée : une échéance d'hier est plus urgente à rattraper
   // qu'une échéance d'il y a un mois, donc elle doit apparaître en premier dans le retard.
   const late = open.filter(t=>t.echeance<todayStr).sort((a,b)=>b.echeance.localeCompare(a.echeance));
@@ -7001,6 +7001,8 @@ function renderQueue(){
 
   const card = (t, kind) => {
     const co = byId(DB.companies, t.companyId);
+    if(!co) return ''; // tâche orpheline (entreprise supprimée ou fusionnée depuis) — on l'ignore
+                        // plutôt que de faire planter tout l'affichage d'Aujourd'hui à cause d'elle
     const ct = t.contactId ? byId(DB.contacts, t.contactId) : null;
     const opp = t.opportunityId ? byId(DB.opportunities, t.opportunityId) : null;
     const sel = state.selectedTaskId === t.id ? 'selected' : '';
@@ -7049,6 +7051,13 @@ function renderCockpit(){
     return `<div class="welcome">Sélectionnez une action dans la file de travail, ou une entreprise via la recherche, pour ouvrir le poste de pilotage.<br><br><b>Astuce :</b> tous les blocs restent au même endroit, seul le contenu change d'une entreprise à l'autre.</div>`;
   }
   const co = byId(DB.companies, cid);
+  if(!co){
+    // L'entreprise sélectionnée n'existe plus (supprimée, fusionnée, ou une donnée corrompue
+    // venue d'avant ce correctif) — plutôt que de planter tout l'affichage, on repart sur une
+    // sélection valide, automatiquement, sans bloquer l'utilisateur.
+    state.selectedCompanyId = computeStartingCompanyId();
+    return renderCockpit();
+  }
   const activeTask = state.selectedTaskId ? byId(DB.tasks, state.selectedTaskId) : companyTasks(cid)[0];
   const contacts = companyContacts(cid);
   const opps = companyOpps(cid);
@@ -9818,7 +9827,7 @@ function computeStartingCompanyId(){
   // avant qu'un rendu n'ait eu l'occasion de la construire — sans ça, ce premier appel retombait
   // sur la recherche linéaire coûteuse qu'elle est censée éviter.
   __companiesByIdMap = new Map(DB.companies.map(c=>[c.id,c]));
-  const open = DB.tasks.filter(t=>t.statut==='ouverte' && matchesPrestataireFilter(byId(DB.companies, t.companyId)));
+  const open = DB.tasks.filter(t=>t.statut==='ouverte' && byId(DB.companies, t.companyId) && matchesPrestataireFilter(byId(DB.companies, t.companyId)));
   // Même ordre que celui affiché dans la file de travail (voir renderQueue) : Aujourd'hui en
   // premier, puis le retard du plus proche au plus ancien, puis à venir — pour que l'entreprise
   // ouverte au démarrage soit toujours exactement celle de la toute première action visible.
