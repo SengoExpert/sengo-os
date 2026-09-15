@@ -11246,7 +11246,23 @@ async function initOneDrive(){
 // Premier affichage immédiat avec les données déjà en mémoire (démo ou dernière session) —
 // ne dépend jamais du réseau. La connexion OneDrive se poursuit ensuite en tâche de fond et
 // rafraîchit l'écran une fois prête (connectée, indisponible, ou en erreur).
+function cleanupOversizedLocalBackup(){
+  // Vérification proactive au tout premier chargement : une ancienne sauvegarde faite AVANT
+  // l'allègement des photos (voir buildLightSnapshotForLocalBackup) peut encore occuper plusieurs
+  // méga-octets, bloquant à elle seule tout l'espace de stockage disponible — y compris celui
+  // dont Microsoft a besoin pour la connexion OneDrive. On ne prend aucun risque : si cette
+  // ancienne sauvegarde dépasse une taille raisonnable pour la version allégée, on la supprime
+  // d'emblée, sans attendre qu'une erreur de quota se produise pour agir.
+  try{
+    const raw = localStorage.getItem(LOCAL_BACKUP_KEY);
+    if(raw && raw.length > 2 * 1024 * 1024){
+      localStorage.removeItem(LOCAL_BACKUP_KEY);
+      console.warn(`Ancienne sauvegarde locale de ${(raw.length/1024/1024).toFixed(1)} Mo supprimée au démarrage (bien au-delà de ce que la version actuelle, allégée, devrait occuper).`);
+    }
+  }catch(e){}
+}
 function startApp(){
+  cleanupOversizedLocalBackup();
   __companiesByIdMap = new Map(DB.companies.map(c=>[c.id,c]));
   state.selectedCompanyId = computeStartingCompanyId();
   render();
