@@ -10800,45 +10800,47 @@ async function uploadToOneDrive(jsonString, allowInteractive = false){
    même si le réseau tombe en pleine saisie, rien n'est perdu : dès que le réseau revient, la
    sauvegarde en ligne reprend automatiquement, sans que l'utilisateur ait à faire quoi que ce
    soit. */
-const LOCAL_BACKUP_KEY = 'sengo_os_local_backup';
-function buildLightSnapshotForLocalBackup(){
-  // Retirer les photos (voir plus bas) ne suffit pas toujours : après des mois d'usage réel, le
-  // texte à lui seul (des centaines d'entreprises, tâches, notes...) peut dépasser la limite de
-  // stockage de Safari, même sans la moindre photo. Or ce filet de sécurité local n'a besoin de
-  // protéger qu'UNE SEULE chose : ce qui vient d'être modifié et n'a peut-être pas encore eu le
-  // temps de partir vers OneDrive avant une fermeture brutale. Tout le reste, déjà synchronisé
-  // depuis longtemps, est de toute façon déjà en sécurité là-bas — inutile de le dupliquer en
-  // local à chaque fois. On ne garde donc que les fiches touchées dans les dernières 48h.
-  const RECENT_WINDOW_MS = 48 * 60 * 60 * 1000;
-  const cutoff = Date.now() - RECENT_WINDOW_MS;
-  const isRecent = r => r._fieldTimestamps && Object.values(r._fieldTimestamps).some(ts => ts >= cutoff);
-  const snap = buildSnapshot();
-  const keepRecent = arr => arr.filter(isRecent);
-  return {
-    ...snap,
-    companies: keepRecent(snap.companies),
-    contacts: keepRecent(snap.contacts),
-    tasks: keepRecent(snap.tasks),
-    opportunities: keepRecent(snap.opportunities),
-    documents: keepRecent(snap.documents),
-    // Les photos (encodées en base64) peuvent à elles seules représenter plusieurs méga-octets —
-    // même parmi les notes récentes, on ne garde que leurs informations (nom, titre), jamais
-    // l'image elle-même, qui reste de toute façon protégée par la vraie sauvegarde OneDrive.
-    notes: keepRecent(snap.notes).map(n => n.photos && n.photos.length ? {...n, photos: n.photos.map(p => ({id:p.id, name:p.name, titre:p.titre}))} : n),
-  };
+const LOCAL_BACKUP_KEY = 'sengo_os_local_backup'; // ancienne clé localStorage — encore utile pour
+                                                    // détecter et nettoyer une trace laissée par
+                                                    // une version antérieure de l'app (voir plus bas)
+const IDB_NAME = 'sengo_os_backup', IDB_STORE = 'snapshots', IDB_KEY = 'latest';
+function openBackupDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore(IDB_STORE); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
 }
-function saveLocalBackup(){
+async function saveLocalBackup(){
+  // Stockée dans IndexedDB plutôt que localStorage : sa limite est bien plus large (plusieurs
+  // centaines de Mo en général, contre 5 à 10 Mo pour localStorage) et surtout totalement séparée
+  // — localStorage sert aussi à Microsoft pour conserver la connexion OneDrive, donc le moindre
+  // octet qu'on y occupait pouvait, une fois la limite atteinte, perturber la connexion elle-même.
+  // Cette bien plus grande marge permet de garder ici la base complète, photos comprises, plutôt
+  // que de devoir choisir quoi en retirer : l'accès hors-ligne reste ainsi complet, pas partiel.
   try{
-    localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(buildLightSnapshotForLocalBackup()));
+    const db = await openBackupDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(buildSnapshot(), IDB_KEY);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
   }catch(e){
-    console.warn('Sauvegarde locale de secours impossible (espace de stockage plein ?)', e);
-    // Une ancienne sauvegarde, plus volumineuse (avant ce correctif, ou avec énormément de
-    // texte), peut occuper à elle seule tout l'espace disponible et empêcher jusqu'à la
-    // connexion OneDrive de fonctionner correctement (Microsoft utilise ce même espace). On la
-    // supprime alors entièrement plutôt que de la laisser bloquer indéfiniment cet espace —
-    // tant pis pour cette sauvegarde de secours précise, la vraie sauvegarde vers OneDrive reste
-    // de toute façon le filet de sécurité principal.
-    try{ localStorage.removeItem(LOCAL_BACKUP_KEY); }catch(e2){}
+    console.warn('Sauvegarde locale de secours impossible', e);
+  }
+}
+async function loadLocalBackup(){
+  try{
+    const db = await openBackupDB();
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(IDB_KEY);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  }catch(e){
+    return null;
   }
 }
 let __appInitialized = false; // devient vrai une fois qu'initOneDrive() a fini de vérifier s'il
@@ -10857,12 +10859,6 @@ function scheduleLocalBackup(){
   // l'application est fermée juste après une modification.
   clearTimeout(__localBackupTimer);
   __localBackupTimer = setTimeout(saveLocalBackup, 600);
-}
-function loadLocalBackup(){
-  try{
-    const raw = localStorage.getItem(LOCAL_BACKUP_KEY);
-    return raw ? JSON.parse(raw) : null;
-  }catch(e){ return null; }
 }
 let hasUnsyncedChanges = false;
 let __onlineRetryRegistered = false;
@@ -11172,14 +11168,14 @@ async function initOneDrive(){
       // bloc de récupération normal ci-dessous, ni par le "catch" global), l'app resterait sur
       // ses données de démonstration de départ, que la sauvegarde locale rapide (voir
       // scheduleLocalBackup) aurait alors fini par écraser la vraie sauvegarde avec.
-      const localBackup = loadLocalBackup();
+      const localBackup = await loadLocalBackup();
       if(localBackup){
-        // mergeSnapshot (pas applySnapshot) : cette sauvegarde locale ne contient plus QUE les
-        // fiches modifiées récemment (voir buildLightSnapshotForLocalBackup) — la fusionner dans
-        // les données déjà chargées ajoute ces changements récents sans effacer tout le reste.
+        // mergeSnapshot par précaution (plutôt qu'un remplacement total) : au cas où cette
+        // sauvegarde ne daterait pas exactement d'aujourd'hui, ça garantit qu'aucune donnée déjà
+        // chargée ne puisse jamais disparaître, même dans un scénario imprévu.
         mergeSnapshot(localBackup);
         state.selectedCompanyId = computeStartingCompanyId();
-        toast('📦 Réseau indisponible — vos modifications récentes enregistrées sur cet appareil ont été retrouvées. La synchronisation reprendra dès le retour du réseau.', 5000);
+        toast('📦 Réseau indisponible — vos données enregistrées sur cet appareil ont été chargées. La synchronisation reprendra dès le retour du réseau.', 5000);
       }
       return;
     }
@@ -11216,11 +11212,10 @@ async function initOneDrive(){
       // pleine saisie, des modifications ont pu ne JAMAIS atteindre OneDrive. Sans cette
       // vérification, la version distante (plus ancienne) écraserait purement et simplement ces
       // modifications au prochain démarrage — exactement la perte de données à éviter.
-      const localBackup = loadLocalBackup();
+      const localBackup = await loadLocalBackup();
       const localIsNewer = localBackup && (!snap || !snap.savedAt || new Date(localBackup.savedAt) > new Date(snap.savedAt));
       if(localIsNewer){
-        // mergeSnapshot ici aussi, pour la même raison : localBackup n'est plus qu'un sous-
-        // ensemble des fiches récemment modifiées, jamais la base complète.
+        // mergeSnapshot par précaution ici aussi, plutôt qu'un remplacement total.
         mergeSnapshot(localBackup);
         if(snap) mergeSnapshot(snap);
         toast('📦 Des modifications faites hors-ligne ont été retrouvées et récupérées.', 4500);
@@ -11241,11 +11236,11 @@ async function initOneDrive(){
     // Le réseau est indisponible dès l'ouverture de l'app : on charge quand même ce qui a pu
     // être mis de côté localement lors d'une session précédente, plutôt que de laisser
     // l'utilisateur repartir sur les données de démonstration de départ comme si de rien n'était.
-    const localBackup = loadLocalBackup();
+    const localBackup = await loadLocalBackup();
     if(localBackup){
       mergeSnapshot(localBackup);
       state.selectedCompanyId = computeStartingCompanyId();
-      toast('📦 Réseau indisponible — vos modifications récentes enregistrées sur cet appareil ont été retrouvées. La synchronisation reprendra dès le retour du réseau.', 5000);
+      toast('📦 Réseau indisponible — vos données enregistrées sur cet appareil ont été chargées. La synchronisation reprendra dès le retour du réseau.', 5000);
     }
   }finally{
     __appInitialized = true; // la vérification de récupération est terminée — la sauvegarde
@@ -11262,18 +11257,13 @@ async function initOneDrive(){
 // ne dépend jamais du réseau. La connexion OneDrive se poursuit ensuite en tâche de fond et
 // rafraîchit l'écran une fois prête (connectée, indisponible, ou en erreur).
 function cleanupOversizedLocalBackup(){
-  // Vérification proactive au tout premier chargement : une ancienne sauvegarde faite AVANT
-  // l'allègement des photos (voir buildLightSnapshotForLocalBackup) peut encore occuper plusieurs
-  // méga-octets, bloquant à elle seule tout l'espace de stockage disponible — y compris celui
-  // dont Microsoft a besoin pour la connexion OneDrive. On ne prend aucun risque : si cette
-  // ancienne sauvegarde dépasse une taille raisonnable pour la version allégée, on la supprime
-  // d'emblée, sans attendre qu'une erreur de quota se produise pour agir.
+  // La sauvegarde locale vit désormais dans IndexedDB, pas localStorage (voir saveLocalBackup) —
+  // ce même stockage localStorage sert aussi à Microsoft pour conserver la connexion OneDrive.
+  // Une ancienne sauvegarde laissée ici par une version antérieure de l'app n'a donc plus aucune
+  // utilité et peut bloquer inutilement de l'espace dont Microsoft a besoin : on la supprime
+  // purement et simplement, sans même avoir besoin d'en vérifier la taille au préalable.
   try{
-    const raw = localStorage.getItem(LOCAL_BACKUP_KEY);
-    if(raw && raw.length > 2 * 1024 * 1024){
-      localStorage.removeItem(LOCAL_BACKUP_KEY);
-      console.warn(`Ancienne sauvegarde locale de ${(raw.length/1024/1024).toFixed(1)} Mo supprimée au démarrage (bien au-delà de ce que la version actuelle, allégée, devrait occuper).`);
-    }
+    localStorage.removeItem(LOCAL_BACKUP_KEY);
   }catch(e){}
 }
 function startApp(){
