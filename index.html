@@ -10802,19 +10802,29 @@ async function uploadToOneDrive(jsonString, allowInteractive = false){
    soit. */
 const LOCAL_BACKUP_KEY = 'sengo_os_local_backup';
 function buildLightSnapshotForLocalBackup(){
-  // Les photos (encodées en base64 dans dataUrl) peuvent à elles seules représenter plusieurs
-  // méga-octets — largement de quoi saturer le stockage local du navigateur (5 à 10 Mo en
-  // général, moins encore sur certaines configurations Safari), empêchant alors toute nouvelle
-  // sauvegarde locale de secours d'aboutir. Pire : ce même stockage sert aussi à Microsoft pour
-  // conserver la connexion OneDrive — un stockage saturé par nos propres sauvegardes peut donc,
-  // en cascade, perturber la connexion elle-même. On retire donc les photos de CETTE sauvegarde
-  // de secours spécifiquement (la vraie sauvegarde vers OneDrive, elle, les conserve normalement) :
-  // en cas de coupure, on préfère retrouver tout le texte sans les photos plutôt que de risquer de
-  // ne rien pouvoir sauvegarder du tout, texte compris.
+  // Retirer les photos (voir plus bas) ne suffit pas toujours : après des mois d'usage réel, le
+  // texte à lui seul (des centaines d'entreprises, tâches, notes...) peut dépasser la limite de
+  // stockage de Safari, même sans la moindre photo. Or ce filet de sécurité local n'a besoin de
+  // protéger qu'UNE SEULE chose : ce qui vient d'être modifié et n'a peut-être pas encore eu le
+  // temps de partir vers OneDrive avant une fermeture brutale. Tout le reste, déjà synchronisé
+  // depuis longtemps, est de toute façon déjà en sécurité là-bas — inutile de le dupliquer en
+  // local à chaque fois. On ne garde donc que les fiches touchées dans les dernières 48h.
+  const RECENT_WINDOW_MS = 48 * 60 * 60 * 1000;
+  const cutoff = Date.now() - RECENT_WINDOW_MS;
+  const isRecent = r => r._fieldTimestamps && Object.values(r._fieldTimestamps).some(ts => ts >= cutoff);
   const snap = buildSnapshot();
+  const keepRecent = arr => arr.filter(isRecent);
   return {
     ...snap,
-    notes: snap.notes.map(n => n.photos && n.photos.length ? {...n, photos: n.photos.map(p => ({id:p.id, name:p.name, titre:p.titre}))} : n),
+    companies: keepRecent(snap.companies),
+    contacts: keepRecent(snap.contacts),
+    tasks: keepRecent(snap.tasks),
+    opportunities: keepRecent(snap.opportunities),
+    documents: keepRecent(snap.documents),
+    // Les photos (encodées en base64) peuvent à elles seules représenter plusieurs méga-octets —
+    // même parmi les notes récentes, on ne garde que leurs informations (nom, titre), jamais
+    // l'image elle-même, qui reste de toute façon protégée par la vraie sauvegarde OneDrive.
+    notes: keepRecent(snap.notes).map(n => n.photos && n.photos.length ? {...n, photos: n.photos.map(p => ({id:p.id, name:p.name, titre:p.titre}))} : n),
   };
 }
 function saveLocalBackup(){
@@ -11164,9 +11174,12 @@ async function initOneDrive(){
       // scheduleLocalBackup) aurait alors fini par écraser la vraie sauvegarde avec.
       const localBackup = loadLocalBackup();
       if(localBackup){
-        applySnapshot(localBackup);
+        // mergeSnapshot (pas applySnapshot) : cette sauvegarde locale ne contient plus QUE les
+        // fiches modifiées récemment (voir buildLightSnapshotForLocalBackup) — la fusionner dans
+        // les données déjà chargées ajoute ces changements récents sans effacer tout le reste.
+        mergeSnapshot(localBackup);
         state.selectedCompanyId = computeStartingCompanyId();
-        toast('📦 Réseau indisponible — vos données enregistrées sur cet appareil ont été chargées. La synchronisation reprendra dès le retour du réseau.', 5000);
+        toast('📦 Réseau indisponible — vos modifications récentes enregistrées sur cet appareil ont été retrouvées. La synchronisation reprendra dès le retour du réseau.', 5000);
       }
       return;
     }
@@ -11206,7 +11219,9 @@ async function initOneDrive(){
       const localBackup = loadLocalBackup();
       const localIsNewer = localBackup && (!snap || !snap.savedAt || new Date(localBackup.savedAt) > new Date(snap.savedAt));
       if(localIsNewer){
-        applySnapshot(localBackup);
+        // mergeSnapshot ici aussi, pour la même raison : localBackup n'est plus qu'un sous-
+        // ensemble des fiches récemment modifiées, jamais la base complète.
+        mergeSnapshot(localBackup);
         if(snap) mergeSnapshot(snap);
         toast('📦 Des modifications faites hors-ligne ont été retrouvées et récupérées.', 4500);
       } else {
@@ -11228,9 +11243,9 @@ async function initOneDrive(){
     // l'utilisateur repartir sur les données de démonstration de départ comme si de rien n'était.
     const localBackup = loadLocalBackup();
     if(localBackup){
-      applySnapshot(localBackup);
+      mergeSnapshot(localBackup);
       state.selectedCompanyId = computeStartingCompanyId();
-      toast('📦 Réseau indisponible — vos données enregistrées sur cet appareil ont été chargées. La synchronisation reprendra dès le retour du réseau.', 5000);
+      toast('📦 Réseau indisponible — vos modifications récentes enregistrées sur cet appareil ont été retrouvées. La synchronisation reprendra dès le retour du réseau.', 5000);
     }
   }finally{
     __appInitialized = true; // la vérification de récupération est terminée — la sauvegarde
