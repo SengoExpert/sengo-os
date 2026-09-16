@@ -4973,6 +4973,18 @@ let DB = {
 
   history: [], // calculé dynamiquement
   tournees: [], // tournées commerciales créées depuis la carte
+  taskCategories: [
+    'Relancer par téléphone',
+    'Relancer par email',
+    'Envoyer un devis',
+    'Envoyer une proposition tarifaire',
+    'Préparer un rendez-vous',
+    'Planifier une visite terrain',
+    'Effectuer un suivi commercial',
+    'Relancer suite à un essai produit',
+    'Envoyer une documentation technique',
+    'Faire un point sur une opportunité en cours',
+  ], // extensible : l'utilisateur peut en ajouter de nouvelles (voir addTaskCategory)
   tombstones: [], // {id, type, deletedAt} — trace des suppressions, pour que la fusion entre
                    // appareils ne fasse pas "revivre" une fiche supprimée ailleurs
 };
@@ -5906,6 +5918,16 @@ function closeEditTask(){
   state.editingTaskId = null;
   render();
 }
+function addEditTaskCategory(taskId){
+  const t = byId(DB.tasks, taskId);
+  if(!t) return;
+  const name = (prompt('Nouvelle catégorie de tâche :') || '').trim();
+  if(name){
+    if(!DB.taskCategories.includes(name)) DB.taskCategories.push(name);
+    t.categorie = name; // appliquée tout de suite, comme le choix explicite qu'elle est
+  }
+  render();
+}
 function saveEditTask(){
   const t = byId(DB.tasks, state.editingTaskId);
   if(!t) return;
@@ -5916,6 +5938,7 @@ function saveEditTask(){
   const echeance = document.getElementById('et-echeance').value || t.echeance;
   const heure = document.getElementById('et-heure').value || '';
   const priorite = document.getElementById('et-priorite').value;
+  const categorie = document.getElementById('et-categorie').value;
   const statut = document.getElementById('et-statut').value;
   const resultat = document.getElementById('et-resultat').value.trim();
   t.titre = titre;
@@ -5923,6 +5946,7 @@ function saveEditTask(){
   t.echeance = echeance;
   t.heure = heure;
   t.priorite = priorite;
+  t.categorie = categorie;
   const wasTerminee = t.statut === 'terminee';
   if(statut==='terminee' && !wasTerminee){
     t.dateTerminee = todayStr;
@@ -6878,6 +6902,7 @@ function performDeleteContact(kid){
 let addingTaskFor = null;
 function toggleAddTask(cid){
   addingTaskFor = addingTaskFor === cid ? null : cid;
+  pendingTaskCategorie = '';
   render();
 }
 function submitTask(cid){
@@ -6887,8 +6912,9 @@ function submitTask(cid){
   const priorite = document.getElementById('nt-priorite').value;
   if(!titre){ toast('Le titre de la tâche est requis.'); return; }
   const id = gen_id_client('t');
-  DB.tasks.push({id, companyId:cid, contactId:null, opportunityId:null, titre, echeance, heure, priorite, statut:'ouverte'});
+  DB.tasks.push({id, companyId:cid, contactId:null, opportunityId:null, titre, echeance, heure, priorite, statut:'ouverte', categorie: pendingTaskCategorie});
   addingTaskFor = null;
+  pendingTaskCategorie = '';
   toast(heure ? 'Rendez-vous créé.' : 'Tâche créée.');
   render();
 }
@@ -7072,6 +7098,7 @@ function renderQueue(){
       </div>
       <div class="tc-title">${esc(t.titre)}</div>
       <div class="tc-meta">
+        ${t.categorie ? `<span class="pill">${esc(t.categorie)}</span>` : ''}
         ${ct ? `<span class="pill contact">${esc(ct.prenom)}</span>` : ''}
         ${opp ? `<span class="pill opp">${esc(opp.intitule)}</span>` : ''}
       </div>
@@ -7178,31 +7205,30 @@ function renderCoHeader(co){
   </div>`;
 }
 
-const TASK_TEMPLATES = [
-  'Relancer par téléphone',
-  'Relancer par email',
-  'Envoyer un devis',
-  'Envoyer une proposition tarifaire',
-  'Préparer un rendez-vous',
-  'Planifier une visite terrain',
-  'Effectuer un suivi commercial',
-  'Relancer suite à un essai produit',
-  'Envoyer une documentation technique',
-  'Faire un point sur une opportunité en cours',
-];
+let pendingTaskCategorie = '';
 function applyTaskTemplate(sel){
   const input = document.getElementById('nt-titre');
-  if(sel.value) input.value = sel.value;
+  pendingTaskCategorie = sel.value;
+  if(sel.value && !input.value.trim()) input.value = sel.value; // pré-remplit le titre seulement s'il est encore vide, pour ne pas écraser un texte déjà en cours de frappe
   input.focus();
+}
+function addTaskCategory(){
+  const name = (prompt('Nouvelle catégorie de tâche :') || '').trim();
+  if(!name) return;
+  if(!DB.taskCategories.includes(name)) DB.taskCategories.push(name);
+  pendingTaskCategorie = name;
+  const titre = document.getElementById('nt-titre');
+  if(titre && !titre.value.trim()) titre.value = name;
+  render();
 }
 function renderInlineTaskForm(cid){
   if(addingTaskFor !== cid) return '';
   return `
   <div class="inline-form">
-    <select id="nt-template" onchange="applyTaskTemplate(this)">
-      <option value="">Choisir une action proposée…</option>
-      ${TASK_TEMPLATES.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join('')}
-      <option value="">Autre (personnalisé)</option>
+    <select id="nt-template" onchange="this.value==='__add__' ? addTaskCategory() : applyTaskTemplate(this)">
+      <option value="">Choisir une catégorie…</option>
+      ${DB.taskCategories.map(t=>`<option value="${esc(t)}" ${pendingTaskCategorie===t?'selected':''}>${esc(t)}</option>`).join('')}
+      <option value="__add__">+ Ajouter une nouvelle catégorie…</option>
     </select>
     <div class="grid2">
       <input id="nt-titre" placeholder="Intitulé de la tâche" data-focus-key="nt-titre" />
@@ -7231,6 +7257,7 @@ function renderTaskHero(task, co){
   <div class="card task-hero">
     <div class="tag-label">Tâche en cours ${relLabel(task.echeance) === "Aujourd'hui" ? "· pour aujourd'hui" : task.echeance<todayStr ? "· en retard" : "· à venir"}</div>
     <div class="th-title">${esc(task.titre)}</div>
+    ${task.categorie ? `<span class="pill" style="margin:2px 0 6px;display:inline-block;">${esc(task.categorie)}</span>` : ''}
     <div class="th-meta">${ct?esc(ct.prenom+' '+ct.nom)+' · ':''}${opp?esc(opp.intitule)+' · ':''}échéance ${fmtDate(task.echeance)}</div>
     <div class="th-actions">
       <button class="btn primary" onclick="openFinish('${task.id}')">✓ Terminer l'action</button>
@@ -8508,7 +8535,7 @@ function renderTacheTableBody(list){
   return `
           ${list.map(t=>`
             <tr onclick="selectCompany('${t.companyId}','${t.id}');state.activeNav='aujourdhui';render()" style="${t.statut==='terminee'?'opacity:.55;':''}">
-              <td><div class="ent-name">${esc(t.titre)}</div>${t.statut==='terminee'&&t.resultat?`<div class="ent-region">${esc(t.resultat.slice(0,80))}${t.resultat.length>80?'…':''}</div>`:''}</td>
+              <td><div class="ent-name">${esc(t.titre)}</div>${t.categorie ? `<span class="pill" style="margin-top:2px;">${esc(t.categorie)}</span>` : ''}${t.statut==='terminee'&&t.resultat?`<div class="ent-region">${esc(t.resultat.slice(0,80))}${t.resultat.length>80?'…':''}</div>`:''}</td>
               <td>${t._co ? esc(t._co.nom) : '—'}</td>
               <td><span class="badge potentiel-${t.priorite==='haute'?'fort':t.priorite==='moyenne'?'moyen':'faible'}">${PRIORITE_LABELS[t.priorite]||t.priorite}</span></td>
               <td class="mono">${fmtDate(t.echeance)}${t.statut==='ouverte' && t.echeance<todayStr ? ' <span style="color:var(--red);font-weight:700;">retard</span>' : ''}</td>
@@ -9551,6 +9578,15 @@ function renderEditTaskModal(){
           </select>
         </div>
         <div class="modal-field">
+          <label>Catégorie</label>
+          <select id="et-categorie" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13.5px;" onchange="if(this.value==='__add__') addEditTaskCategory('${t.id}');">
+            <option value="">— Aucune —</option>
+            ${DB.taskCategories.map(c=>`<option value="${esc(c)}" ${t.categorie===c?'selected':''}>${esc(c)}</option>`).join('')}
+            ${t.categorie && !DB.taskCategories.includes(t.categorie) ? `<option value="${esc(t.categorie)}" selected>${esc(t.categorie)}</option>` : ''}
+            <option value="__add__">+ Ajouter une nouvelle catégorie…</option>
+          </select>
+        </div>
+        <div class="modal-field">
           <label>Statut</label>
           <select id="et-statut" style="width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13.5px;">
             <option value="ouverte" ${t.statut==='ouverte'?'selected':''}>Ouverte</option>
@@ -10278,7 +10314,7 @@ function buildSnapshot(){
     version: 2, savedAt: new Date().toISOString(),
     companies: DB.companies, contacts: DB.contacts, tasks: DB.tasks,
     notes: DB.notes, opportunities: DB.opportunities, documents: DB.documents,
-    tournees: DB.tournees, tombstones: DB.tombstones,
+    tournees: DB.tournees, tombstones: DB.tombstones, taskCategories: DB.taskCategories,
   };
 }
 function applySnapshot(snap){
@@ -10294,6 +10330,7 @@ function applySnapshot(snap){
   if(snap.opportunities) DB.opportunities = dedupeById(snap.opportunities);
   if(snap.documents) DB.documents = dedupeById(snap.documents);
   if(snap.tournees) DB.tournees = snap.tournees;
+  if(snap.taskCategories && snap.taskCategories.length) DB.taskCategories = snap.taskCategories;
   if(snap.tombstones) DB.tombstones = snap.tombstones;
   DB.companies.forEach(c => { c._deptCache = undefined; });
   __companiesByIdMap = new Map(DB.companies.map(c=>[c.id,c])); // reconstruite immédiatement, sans
@@ -10391,6 +10428,11 @@ function mergeSnapshot(snap){
   DB.opportunities = mergeById(DB.opportunities, snap.opportunities, tombstones);
   DB.documents = mergeById(DB.documents, snap.documents, tombstones);
   DB.tournees = mergeById(DB.tournees, snap.tournees, tombstones);
+  if(snap.taskCategories){
+    // De simples noms, pas des fiches avec identifiant — on réunit les deux listes plutôt que de
+    // comparer des horodatages, pour qu'une catégorie ajoutée sur un appareil profite à tous.
+    DB.taskCategories = [...new Set([...DB.taskCategories, ...snap.taskCategories])];
+  }
   DB.tombstones = tombstones;
   DB.companies.forEach(c => { c._deptCache = undefined; });
   // Important : sans ceci, le prochain rendu comparerait les fiches fusionnées à leur état
