@@ -10277,12 +10277,12 @@ function applySnapshot(snap){
   // en cours de session (fusion avec ce qu'un autre appareil a pu modifier entre-temps), voir
   // mergeSnapshot() ci-dessous, qui compare les dates de modification plutôt que d'écraser.
   if(!snap) return;
-  if(snap.companies) DB.companies = snap.companies;
-  if(snap.contacts) DB.contacts = snap.contacts;
-  if(snap.tasks) DB.tasks = snap.tasks;
-  if(snap.notes) DB.notes = snap.notes;
-  if(snap.opportunities) DB.opportunities = snap.opportunities;
-  if(snap.documents) DB.documents = snap.documents;
+  if(snap.companies) DB.companies = dedupeById(snap.companies);
+  if(snap.contacts) DB.contacts = dedupeById(snap.contacts);
+  if(snap.tasks) DB.tasks = dedupeById(snap.tasks);
+  if(snap.notes) DB.notes = dedupeById(snap.notes);
+  if(snap.opportunities) DB.opportunities = dedupeById(snap.opportunities);
+  if(snap.documents) DB.documents = dedupeById(snap.documents);
   if(snap.tournees) DB.tournees = snap.tournees;
   if(snap.tombstones) DB.tombstones = snap.tombstones;
   DB.companies.forEach(c => { c._deptCache = undefined; });
@@ -10329,6 +10329,26 @@ function mergeById(localArr, remoteArr, tombstones){
     if(rec && t.deletedAt >= (rec._updatedAt||0)) map.delete(t.id);
   });
   return Array.from(map.values());
+}
+function dedupeById(arr){
+  // Filet de sécurité : si un même identifiant se retrouve porté par deux fiches distinctes dans
+  // le même tableau (par exemple suite à une fusion ou une synchronisation qui se serait mal
+  // déroulée), une simple recherche par identifiant (byId) ne peut alors trouver que l'UNE des
+  // deux — modifier l'une ne modifie jamais l'autre, donnant l'impression trompeuse qu'un
+  // changement "ne s'enregistre pas" ou "revient tout seul à l'ancienne valeur". On fusionne
+  // alors les doublons détectés en une seule fiche, en conservant pour chaque champ la valeur la
+  // plus récente des deux (voir mergeRecordFields) plutôt que de choisir arbitrairement.
+  if(!arr || !arr.length) return arr;
+  const map = new Map();
+  let hadDupes = false;
+  arr.forEach(r => {
+    if(!r || !r.id) return;
+    const existing = map.get(r.id);
+    if(existing){ hadDupes = true; map.set(r.id, mergeRecordFields(existing, r)); }
+    else map.set(r.id, r);
+  });
+  if(hadDupes) console.warn(`Fiche(s) en double détectée(s) et fusionnée(s) automatiquement (${arr.length - map.size} doublon(s)).`);
+  return hadDupes ? Array.from(map.values()) : arr;
 }
 function mergeTombstones(localT, remoteT){
   const map = new Map();
@@ -11319,6 +11339,12 @@ function cleanupOversizedLocalBackup(){
 }
 function startApp(){
   cleanupOversizedLocalBackup();
+  DB.companies = dedupeById(DB.companies);
+  DB.contacts = dedupeById(DB.contacts);
+  DB.tasks = dedupeById(DB.tasks);
+  DB.opportunities = dedupeById(DB.opportunities);
+  DB.notes = dedupeById(DB.notes);
+  DB.documents = dedupeById(DB.documents);
   __companiesByIdMap = new Map(DB.companies.map(c=>[c.id,c]));
   state.selectedCompanyId = computeStartingCompanyId();
   render();
