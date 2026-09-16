@@ -6737,8 +6737,18 @@ function performMergeCompanies(sourceId, targetId){
   });
 
   // Complète les champs vides de la fiche conservée avec ceux de la fiche fusionnée, si utile
-  ['activite','rue','codePostal','ville','adresse','region','tel','site','strategie','groupe','effectif','ca','lat','lon'].forEach(f => {
+  ['activite','rue','codePostal','ville','adresse','region','tel','site','groupe','effectif','ca','lat','lon'].forEach(f => {
     if((target[f]==null || target[f]==='') && source[f]!=null && source[f]!=='') target[f] = source[f];
+  });
+  // "resume" et "strategie" sont des textes libres racontant l'historique et l'approche
+  // commerciale du compte — les deux fiches fusionnées ont chacune pu accumuler leur propre
+  // contexte au fil du temps. Plutôt que de perdre entièrement celui de la fiche absorbée (ce qui
+  // arrivait jusqu'ici, dès que la fiche conservée avait déjà le moindre texte), on les combine
+  // quand ils diffèrent, pour ne jamais perdre d'information déjà notée.
+  ['resume','strategie'].forEach(f => {
+    const t = (target[f]||'').trim(), s = (source[f]||'').trim();
+    if(!t) target[f] = s;
+    else if(s && s !== t) target[f] = t + '\n\n— Depuis la fiche fusionnée « ' + source.nom + ' » —\n' + s;
   });
   if(source.statutClient === 'client') target.statutClient = 'client'; // client d'un côté = client au final
   if((POTENTIEL_RANK[source.potentiel]||0) > (POTENTIEL_RANK[target.potentiel]||0)) target.potentiel = source.potentiel;
