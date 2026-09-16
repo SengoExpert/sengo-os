@@ -6364,9 +6364,11 @@ function applyAddrSuggestion(target, ci, ei){
   }
   toast('Adresse complétée : ' + [e.cp, e.ville].filter(Boolean).join(' ') + '.');
   resetAddrLookup();
-  console.log('[DIAGNOSTIC adresse] appel à render() maintenant...');
-  render();
-  console.log('[DIAGNOSTIC adresse] render() terminé. Valeur relue depuis DB juste après:', target !== 'new' ? byId(DB.companies, target)?.rue : newCompanyForm.rue);
+  console.log('[DIAGNOSTIC adresse] rendu différé programmé...');
+  setTimeout(() => {
+    render();
+    console.log('[DIAGNOSTIC adresse] render() terminé. Valeur relue depuis DB juste après:', target !== 'new' ? byId(DB.companies, target)?.rue : newCompanyForm.rue);
+  }, 0);
 }
 
 function renderAddrLookupBox(target){
@@ -6473,15 +6475,19 @@ function onCompanyPickerBlur(instanceId){
 }
 
 function updatePrestataire(cid, value){
-  if(__inRenderCycle) return; // voir updateCompanyField : évite un déclenchement fantôme
+  console.log('[DIAGNOSTIC prestataire] updatePrestataire appelée — cid:', cid, '| nouvelle valeur:', value);
   const co = byId(DB.companies, cid);
+  console.log('[DIAGNOSTIC prestataire] entreprise trouvée:', co ? co.nom : 'INTROUVABLE', '| prestataire actuel avant changement:', co?.prestataire);
   co.prestataire = value;
   co.partenaire = value === 'SENGO EXPERT' ? 'SENGO Expert direct' : value;
+  console.log('[DIAGNOSTIC prestataire] valeur juste après affectation:', co.prestataire);
   toast('Prestataire mis à jour : ' + value);
-  setTimeout(render, 0);
+  setTimeout(() => {
+    render();
+    console.log('[DIAGNOSTIC prestataire] render() terminé. Valeur relue depuis DB:', byId(DB.companies, cid)?.prestataire);
+  }, 0);
 }
 function updatePotentiel(cid, value){
-  if(__inRenderCycle) return; // voir updateCompanyField : évite un déclenchement fantôme
   const co = byId(DB.companies, cid);
   co.potentiel = value;
   toast('Potentiel mis à jour : ' + value);
@@ -6774,7 +6780,6 @@ function performMergeCompanies(sourceId, targetId){
 }
 
 function changeOppStatus(oid, value){
-  if(__inRenderCycle) return; // voir updateCompanyField : évite un déclenchement fantôme
   const opp = byId(DB.opportunities, oid);
   opp.statut = value;
   toast(`Statut mis à jour : ${STATUS_LABELS[value]}`);
