@@ -6329,10 +6329,14 @@ function toggleAddrLookupExpand(i){
 }
 
 function applyAddrSuggestion(target, ci, ei){
+  console.log('[DIAGNOSTIC adresse] applyAddrSuggestion appelée — target:', target, '| ci:', ci, '| ei:', ei);
   const c = addrLookup.results[ci];
-  if(!c) return;
+  console.log('[DIAGNOSTIC adresse] résultat trouvé dans addrLookup.results:', c ? c.nom : 'AUCUN (results[ci] est introuvable)');
+  if(!c) { console.log('[DIAGNOSTIC adresse] ARRÊT ICI — aucun résultat à cet index, rien ne peut s\'appliquer.'); return; }
   const e = c.etablissements[ei];
+  console.log('[DIAGNOSTIC adresse] établissement choisi:', e);
   if(target === 'new'){
+    console.log('[DIAGNOSTIC adresse] cible = nouvelle entreprise (formulaire de création)');
     newCompanyForm.nom = c.nom;
     newCompanyForm.rue = e.rue;
     newCompanyForm.codePostal = e.cp;
@@ -6340,6 +6344,7 @@ function applyAddrSuggestion(target, ci, ei){
     if(!newCompanyForm.activite && c.naf) newCompanyForm.activite = c.naf;
   } else {
     const co = byId(DB.companies, target);
+    console.log('[DIAGNOSTIC adresse] entreprise ciblée trouvée dans DB.companies:', co ? co.nom + ' (id: ' + co.id + ')' : 'INTROUVABLE — target ne correspond à aucune entreprise !');
     if(co){
       // Modification directe plutôt que updateCompanyField() : cette dernière protège contre un
       // déclenchement "fantôme" causé par la suppression d'un champ de saisie en cours d'édition
@@ -6353,11 +6358,15 @@ function applyAddrSuggestion(target, ci, ei){
       co.ville = e.ville;
       syncAdresseFromParts(co);
       if(!co.activite && c.naf) co.activite = c.naf;
+      console.log('[DIAGNOSTIC adresse] valeurs appliquées sur l\'objet — rue:', co.rue, '| codePostal:', co.codePostal, '| ville:', co.ville, '| adresse combinée:', co.adresse);
+      console.log('[DIAGNOSTIC adresse] state.selectedCompanyId au moment de l\'application:', state.selectedCompanyId, '(doit correspondre à target ci-dessus)');
     }
   }
   toast('Adresse complétée : ' + [e.cp, e.ville].filter(Boolean).join(' ') + '.');
   resetAddrLookup();
+  console.log('[DIAGNOSTIC adresse] appel à render() maintenant...');
   render();
+  console.log('[DIAGNOSTIC adresse] render() terminé. Valeur relue depuis DB juste après:', target !== 'new' ? byId(DB.companies, target)?.rue : newCompanyForm.rue);
 }
 
 function renderAddrLookupBox(target){
