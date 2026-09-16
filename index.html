@@ -6226,18 +6226,31 @@ function clearResumeField(){
 function saveResume(cid){
   const co = byId(DB.companies, cid);
   co.resume = document.getElementById('resume-textarea').value;
+  stampField(co, 'resume');
   state.editingResume = false;
   toast('Résumé mis à jour.');
   render();
 }
 
 let __inRenderCycle = false;
+function stampField(record, field){
+  // Marque IMMÉDIATEMENT (de façon synchrone) ce champ comme "vient d'être modifié", plutôt que
+  // d'attendre que stampUpdatedTimestamps() ne le fasse à l'intérieur du prochain render() —
+  // lequel est volontairement différé de quelques instants dans plusieurs fonctions (voir leurs
+  // propres commentaires). Sans ce marquage immédiat, une vérification automatique des mises à
+  // jour distantes (toutes les 20 secondes, voir checkForRemoteUpdates) tombant pile dans ce
+  // court intervalle ne saurait pas encore que ce champ vient de changer, et pourrait alors le
+  // fusionner avec — et donc écraser par — l'ancienne valeur encore présente sur OneDrive.
+  if(!record._fieldTimestamps) record._fieldTimestamps = {};
+  record._fieldTimestamps[field] = Date.now();
+}
 function updateCompanyField(cid, field, value){
   if(__inRenderCycle) return; // blur "fantôme" causé par la suppression du champ pendant la
                               // reconstruction du DOM (voir render) — pas une vraie action de
                               // l'utilisateur, qui créerait sinon une reconstruction sans fin.
   const co = byId(DB.companies, cid);
   co[field] = value;
+  stampField(co, field);
   if(field==='rue' || field==='codePostal' || field==='ville') syncAdresseFromParts(co);
   // Rendu différé d'un instant (setTimeout 0), plutôt qu'immédiat : au moment précis où ce champ
   // perd le focus (parce qu'on vient de cliquer sur un autre champ juste à côté), le focus passe
@@ -6254,7 +6267,7 @@ function updateCompanyField(cid, field, value){
 function syncAdresseFromParts(co){
   const cpVille = [co.codePostal, co.ville].filter(Boolean).join(' ');
   const parts = [co.rue, cpVille].filter(Boolean);
-  if(parts.length) co.adresse = parts.join(', ');
+  if(parts.length){ co.adresse = parts.join(', '); stampField(co, 'adresse'); }
 }
 
 /* ===== Suggestion d'adresse à partir de la raison sociale =====
@@ -6356,8 +6369,9 @@ function applyAddrSuggestion(target, ci, ei){
       co.rue = e.rue;
       co.codePostal = e.cp;
       co.ville = e.ville;
+      stampField(co, 'rue'); stampField(co, 'codePostal'); stampField(co, 'ville');
       syncAdresseFromParts(co);
-      if(!co.activite && c.naf) co.activite = c.naf;
+      if(!co.activite && c.naf){ co.activite = c.naf; stampField(co, 'activite'); }
       console.log('[DIAGNOSTIC adresse] valeurs appliquées sur l\'objet — rue:', co.rue, '| codePostal:', co.codePostal, '| ville:', co.ville, '| adresse combinée:', co.adresse);
       console.log('[DIAGNOSTIC adresse] state.selectedCompanyId au moment de l\'application:', state.selectedCompanyId, '(doit correspondre à target ci-dessus)');
     }
@@ -6476,10 +6490,13 @@ function onCompanyPickerBlur(instanceId){
 
 function updatePrestataire(cid, value){
   console.log('[DIAGNOSTIC prestataire] updatePrestataire appelée — cid:', cid, '| nouvelle valeur:', value);
+  window.__debugTrackCid = cid; // active le suivi précis de cette entreprise dans render() et mergeSnapshot()
   const co = byId(DB.companies, cid);
   console.log('[DIAGNOSTIC prestataire] entreprise trouvée:', co ? co.nom : 'INTROUVABLE', '| prestataire actuel avant changement:', co?.prestataire);
   co.prestataire = value;
   co.partenaire = value === 'SENGO EXPERT' ? 'SENGO Expert direct' : value;
+  stampField(co, 'prestataire');
+  stampField(co, 'partenaire');
   console.log('[DIAGNOSTIC prestataire] valeur juste après affectation:', co.prestataire);
   toast('Prestataire mis à jour : ' + value);
   setTimeout(() => {
@@ -6490,6 +6507,7 @@ function updatePrestataire(cid, value){
 function updatePotentiel(cid, value){
   const co = byId(DB.companies, cid);
   co.potentiel = value;
+  stampField(co, 'potentiel');
   toast('Potentiel mis à jour : ' + value);
   setTimeout(render, 0);
 }
@@ -6782,6 +6800,7 @@ function performMergeCompanies(sourceId, targetId){
 function changeOppStatus(oid, value){
   const opp = byId(DB.opportunities, oid);
   opp.statut = value;
+  stampField(opp, 'statut');
   toast(`Statut mis à jour : ${STATUS_LABELS[value]}`);
   setTimeout(render, 0);
 }
@@ -9699,8 +9718,10 @@ function stampUpdatedTimestamps(){
 }
 
 function render(){
+  if(window.__debugTrackCid){ console.log('[DIAGNOSTIC prestataire] tout début de render() — valeur:', byId(DB.companies, window.__debugTrackCid)?.prestataire); }
   __companiesByIdMap = new Map(DB.companies.map(c=>[c.id,c]));
   stampUpdatedTimestamps();
+  if(window.__debugTrackCid){ console.log('[DIAGNOSTIC prestataire] juste après stampUpdatedTimestamps() — valeur:', byId(DB.companies, window.__debugTrackCid)?.prestataire); }
   scheduleLocalBackup(); // filet de sécurité local, avec un délai bien plus court que la
                           // sauvegarde réseau — pour ne perdre une saisie que si l'appli est
                           // fermée dans la fraction de seconde qui suit, pas dans les 2 secondes
@@ -10320,10 +10341,16 @@ function mergeTombstones(localT, remoteT){
 }
 function mergeSnapshot(snap){
   if(!snap) return;
+  if(window.__debugTrackCid){
+    const before = byId(DB.companies, window.__debugTrackCid)?.prestataire;
+    const remote = snap.companies?.find(c=>c.id===window.__debugTrackCid)?.prestataire;
+    console.log('[DIAGNOSTIC prestataire] mergeSnapshot() appelée — valeur locale avant fusion:', before, '| valeur distante reçue:', remote);
+  }
   const tombstones = mergeTombstones(DB.tombstones, snap.tombstones);
   DB.companies = mergeById(DB.companies, snap.companies, tombstones);
   DB.contacts = mergeById(DB.contacts, snap.contacts, tombstones);
   DB.tasks = mergeById(DB.tasks, snap.tasks, tombstones);
+  if(window.__debugTrackCid){ console.log('[DIAGNOSTIC prestataire] mergeSnapshot() — valeur locale après fusion:', byId(DB.companies, window.__debugTrackCid)?.prestataire); }
   DB.notes = mergeById(DB.notes, snap.notes, tombstones);
   DB.opportunities = mergeById(DB.opportunities, snap.opportunities, tombstones);
   DB.documents = mergeById(DB.documents, snap.documents, tombstones);
