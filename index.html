@@ -9718,7 +9718,16 @@ function stampUpdatedTimestamps(){
 }
 
 function render(){
-  if(window.__debugTrackCid){ console.log('[DIAGNOSTIC prestataire] tout début de render() — valeur:', byId(DB.companies, window.__debugTrackCid)?.prestataire); }
+  // Filet de sécurité inconditionnel : peu importe comment un identifiant en double a pu se
+  // glisser dans la base (fusion, synchronisation, import...), on s'assure ici qu'il n'en reste
+  // jamais qu'une seule occurrence avant même de reconstruire la table de correspondance juste
+  // en dessous — sans quoi cette table pourrait pointer vers la mauvaise des deux fiches, et une
+  // modification pourtant bien enregistrée semblerait "revenir toute seule" à l'ancienne valeur.
+  DB.companies = dedupeById(DB.companies);
+  if(window.__debugTrackCid){
+    const dupCount = DB.companies.filter(c=>c && c.id===window.__debugTrackCid).length;
+    console.log('[DIAGNOSTIC prestataire] tout début de render() — valeur (via map):', byId(DB.companies, window.__debugTrackCid)?.prestataire, '| nombre de fiches avec cet id dans le tableau (recherche directe, doit être 1):', dupCount);
+  }
   __companiesByIdMap = new Map(DB.companies.map(c=>[c.id,c]));
   stampUpdatedTimestamps();
   if(window.__debugTrackCid){ console.log('[DIAGNOSTIC prestataire] juste après stampUpdatedTimestamps() — valeur:', byId(DB.companies, window.__debugTrackCid)?.prestataire); }
@@ -10286,6 +10295,9 @@ function applySnapshot(snap){
   if(snap.tournees) DB.tournees = snap.tournees;
   if(snap.tombstones) DB.tombstones = snap.tombstones;
   DB.companies.forEach(c => { c._deptCache = undefined; });
+  __companiesByIdMap = new Map(DB.companies.map(c=>[c.id,c])); // reconstruite immédiatement, sans
+    // attendre le prochain rendu — sinon, toute recherche par identifiant faite entre-temps
+    // (byId) pointerait vers les anciens objets, désormais déconnectés de la vraie base.
   __lastRenderSnapshot = {}; // on vient de tout remplacer : on ne compare pas ça à l'ancien état local
 }
 
@@ -10368,6 +10380,9 @@ function mergeSnapshot(snap){
   }
   const tombstones = mergeTombstones(DB.tombstones, snap.tombstones);
   DB.companies = mergeById(DB.companies, snap.companies, tombstones);
+  __companiesByIdMap = new Map(DB.companies.map(c=>[c.id,c])); // voir applySnapshot : sans ça,
+    // même la ligne de diagnostic juste en dessous lirait encore les anciens objets, désormais
+    // déconnectés de la vraie base tout juste remplacée.
   DB.contacts = mergeById(DB.contacts, snap.contacts, tombstones);
   DB.tasks = mergeById(DB.tasks, snap.tasks, tombstones);
   if(window.__debugTrackCid){ console.log('[DIAGNOSTIC prestataire] mergeSnapshot() — valeur locale après fusion:', byId(DB.companies, window.__debugTrackCid)?.prestataire); }
