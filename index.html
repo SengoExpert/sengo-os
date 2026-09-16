@@ -7244,7 +7244,8 @@ function renderTaskHero(task, co){
       <button onclick="postponeTask('${task.id}',15)">15 jours</button>
       <button onclick="postponeTask('${task.id}',30)">1 mois</button>
       <span class="postpone-custom">
-        <input type="date" min="${todayStr}" value="${addDays(2)}" onchange="postponeTaskCustom('${task.id}', this.value)">
+        <input type="date" id="postpone-custom-input-${task.id}" min="${todayStr}" value="${addDays(2)}" onchange="postponeTaskCustom('${task.id}', this.value)">
+        <button class="btn small" onclick="postponeTaskCustom('${task.id}', document.getElementById('postpone-custom-input-${task.id}').value)">Valider</button>
       </span>
     </div>` : ''}
   </div>`;
