@@ -5437,7 +5437,7 @@ function getCompanyDept(c){
 }
 
 function computeBoundsForCompanies(list, padRatio){
-  const pts = list.filter(c=>c.lat!=null && c.lon!=null);
+  const pts = list.filter(c=>c && c.lat!=null && c.lon!=null && !isNaN(c.lat) && !isNaN(c.lon));
   if(!pts.length) return {...DEFAULT_VIEW};
   let lonMin=Infinity,lonMax=-Infinity,latMin=Infinity,latMax=-Infinity;
   pts.forEach(c=>{
@@ -5456,7 +5456,7 @@ function computeBoundsForCompanies(list, padRatio){
 }
 function ensureMapView(){
   if(state.mapView) return;
-  const geocoded = DB.companies.filter(c=>c.lat!=null && c.lon!=null);
+  const geocoded = DB.companies.filter(c=>c.lat!=null && c.lon!=null && !isNaN(c.lat) && !isNaN(c.lon));
   state.mapView = geocoded.length ? computeBoundsForCompanies(geocoded, 0.2) : {...DEFAULT_VIEW};
 }
 function fitMapToCompanies(list){
@@ -5896,7 +5896,7 @@ function callPrimaryContact(cid){
 function emailPrimaryContact(cid){
   const k = primaryContactWith(cid, 'email');
   if(!k){ toast('Aucune adresse email enregistrée pour ce compte.'); return; }
-  openExternal('mailto:' + k.email);
+  openExternal('mailto:' + normalizeEmail(k.email));
 }
 
 function openFinish(taskId){
@@ -6685,7 +6685,7 @@ function submitNewCompany(){
       fonction: newCompanyForm.ctFonction.trim(),
       tel: newCompanyForm.ctTel.trim(),
       mobile: newCompanyForm.ctMobile.trim(),
-      email: newCompanyForm.ctEmail.trim(),
+      email: normalizeEmail(newCompanyForm.ctEmail),
       role: newCompanyForm.ctRole, notes:'',
     });
     contactCree = true;
@@ -6847,7 +6847,7 @@ function submitContact(cid, kid){
   const fonction = contactForm.fonction.trim();
   const tel = contactForm.tel.trim();
   const mobile = contactForm.mobile.trim();
-  const email = contactForm.email.trim();
+  const email = normalizeEmail(contactForm.email);
   const role = contactForm.role;
   const notes = contactForm.notes.trim();
   if(!prenom){ toast('Le prénom est requis.'); return; }
@@ -7004,6 +7004,16 @@ function searchResults(q){
 
 /* ---------------------------- RENDER ---------------------------- */
 function esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function normalizeEmail(s){
+  // Un copier-coller depuis un PDF, un site web ou Word peut glisser des caractères qui
+  // RESSEMBLENT à un trait d'union ou un espace normal, sans en être — invisibles à l'œil, mais
+  // qui empêchent le lien mailto de fonctionner correctement (le navigateur les interprète comme
+  // un domaine international et affiche alors une version encodée à côté de l'originale).
+  return (s||'')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, '-') // tirets typographiques → tiret standard
+    .replace(/[\u00A0\u2000-\u200B\u202F]/g, '') // espaces insécables/typographiques → supprimés (un email n'en contient jamais)
+    .trim();
+}
 
 function renderTopbar(){
   const results = searchResults(state.searchQuery);
@@ -7390,7 +7400,7 @@ function renderContacts(co, contacts){
         <div class="ct-coords">
           ${k.tel && k.tel!=='—' ? `<a class="ct-link" href="tel:${esc(k.tel)}">📞 ${esc(k.tel)}</a>`:''}
           ${k.mobile ? `<a class="ct-link" href="tel:${esc(k.mobile)}">📱 ${esc(k.mobile)}</a>`:''}
-          ${k.email ? `<a class="ct-link" href="mailto:${esc(k.email)}">✉️ ${esc(k.email)}</a>`:''}
+          ${k.email ? `<a class="ct-link" href="mailto:${esc(normalizeEmail(k.email))}">✉️ ${esc(k.email)}</a>`:''}
         </div>
         ${k.notes ? `<div class="ct-notes">${esc(k.notes)}</div>` : ''}
         ${movingContactId===k.id ? `
@@ -8269,7 +8279,7 @@ function renderCtTableBody(list){
                 ${k.mobile ? `<div><a class="ct-link" href="tel:${esc(k.mobile)}" onclick="event.stopPropagation()">📱 ${esc(k.mobile)}</a></div>` : ''}
                 ${(!k.tel || k.tel==='—') && !k.mobile ? '—' : ''}
               </td>
-              <td>${k.email ? `<a class="ct-link" href="mailto:${esc(k.email)}" onclick="event.stopPropagation()">${esc(k.email)}</a>` : '—'}</td>
+              <td>${k.email ? `<a class="ct-link" href="mailto:${esc(normalizeEmail(k.email))}" onclick="event.stopPropagation()">${esc(k.email)}</a>` : '—'}</td>
               <td><button class="btn small primary" onclick="event.stopPropagation();editContactFrom('${k.companyId}','${k.id}')">✎ Modifier</button></td>
             </tr>`).join('')}
           ${!list.length ? `<tr><td colspan="7"><div class="empty-queue" style="padding:16px;">Aucun contact ne correspond à ces filtres.</div></td></tr>` : ''}
@@ -8916,7 +8926,7 @@ function filteredMapCompaniesAll(){
   );
 }
 function filteredMapCompanies(){
-  return filteredMapCompaniesAll().filter(c => c.lat!=null && c.lon!=null);
+  return filteredMapCompaniesAll().filter(c => c.lat!=null && c.lon!=null && !isNaN(c.lat) && !isNaN(c.lon));
 }
 
 function toggleTourSelection(cid){
@@ -8968,7 +8978,7 @@ function openMailingInMailClient(){
     toast(`Trop d'adresses (${mailingEmails.length}) pour ouvrir directement votre messagerie — utilisez plutôt "Copier les adresses" et collez-les en Cci dans votre outil habituel.`, 4500);
     return;
   }
-  openExternal('mailto:?bcc=' + encodeURIComponent(mailingEmails.join(',')));
+  openExternal('mailto:?bcc=' + encodeURIComponent(mailingEmails.map(normalizeEmail).join(',')));
 }
 function renderMailingModal(){
   return `
@@ -9242,7 +9252,7 @@ function computeMapDynamicParts(){
   const sidebarInfoHtml = `${filtered.length} entreprise(s) sur la carte${nonGeocoded>0?` · <a href="#" onclick="state.showNonGeocoded=!state.showNonGeocoded;render();return false;" style="color:var(--amber);font-weight:600;">${nonGeocoded} non géolocalisée(s)${state.showNonGeocoded?' ▲':' ▼'}</a>`:''}${(state.mapSecteurFilter!=='tous'||state.mapRegionFilter!=='tous'||state.mapDeptFilter!=='tous'||state.mapQuery)?` · <a href="#" onclick="state.mapSecteurFilter='tous';state.mapRegionFilter='tous';state.mapDeptFilter='tous';state.mapQuery='';render();return false;" style="color:var(--brand-orange-dark);">réinitialiser</a>`:''}` +
     (state.showNonGeocoded && nonGeocoded>0 ? `
     <div class="non-geo-list">
-      ${allFiltered.filter(c=>c.lat==null||c.lon==null).map(c=>`
+      ${allFiltered.filter(c=>c.lat==null||c.lon==null||isNaN(c.lat)||isNaN(c.lon)).map(c=>`
         <div class="non-geo-item" onclick="selectCompany('${c.id}');state.activeNav='aujourdhui';render()">
           <span>${esc(c.nom)}</span><span class="ent-region">${esc(c.ville||'ville inconnue')} — cliquer pour compléter l'adresse</span>
         </div>`).join('')}
