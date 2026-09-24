@@ -6218,7 +6218,7 @@ function renderNotesPageForm(){
       <div class="note-add-row">
         <label class="btn small photo-btn">
           📷 Ajouter des photos
-          <input type="file" accept="image/*" capture="environment" multiple style="display:none;" onchange="onNotePhotoSelect(this)">
+          <input type="file" accept="image/*" multiple style="display:none;" onchange="onNotePhotoSelect(this)">
         </label>
         <button class="btn primary small" onclick="submitNotesPageNote()">Enregistrer la note</button>
       </div>
@@ -7962,7 +7962,7 @@ function renderNotes(co, notes){
       <div class="note-add-row">
         <label class="btn small photo-btn">
           📷 Ajouter des photos
-          <input type="file" accept="image/*" capture="environment" multiple style="display:none;" onchange="onNotePhotoSelect(this)">
+          <input type="file" accept="image/*" multiple style="display:none;" onchange="onNotePhotoSelect(this)">
         </label>
         <button class="btn primary small" onclick="addNote('${co.id}')">Enregistrer la note</button>
       </div>
