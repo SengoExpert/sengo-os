@@ -6937,7 +6937,7 @@ function renderSearchResultsOnly(){
     const html = `
       <div class="search-results">
         ${results.length ? results.map(r=>`
-          <div class="sr-item" onclick="runSearchAction('${r.companyId}')">
+          <div class="sr-item" onmousedown="event.preventDefault();runSearchAction('${r.companyId}')">
             <span>${esc(r.label)}</span><span class="sr-tag">${r.tag}</span>
           </div>`).join('') : `<div class="sr-empty">Aucun résultat pour « ${esc(state.searchQuery)} »</div>`}
       </div>`;
@@ -6971,6 +6971,9 @@ function closeSearchResultsSoon(){
 }
 function runSearchAction(companyId){
   state.searchQuery = ''; // referme le menu de résultats une fois la sélection faite
+  searchExpanded = false; // revient à l'icône seule — avec onmousedown+preventDefault, le champ
+                           // ne perd plus le focus tout seul, donc closeSearchResultsSoon() ne se
+                           // déclenche plus ici ; il faut donc le faire explicitement.
   if(companyId) selectCompany(companyId);
 }
 function searchResults(q){
@@ -7069,7 +7072,7 @@ function renderTopbar(){
       ${state.searchQuery.length>1 ? `
       <div class="search-results">
         ${results.length ? results.map(r=>`
-          <div class="sr-item" onclick="runSearchAction('${r.companyId}')">
+          <div class="sr-item" onmousedown="event.preventDefault();runSearchAction('${r.companyId}')">
             <span>${esc(r.label)}</span><span class="sr-tag">${r.tag}</span>
           </div>`).join('') : `<div class="sr-empty">Aucun résultat pour « ${esc(state.searchQuery)} »</div>`}
       </div>` : ''}
