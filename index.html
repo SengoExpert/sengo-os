@@ -349,6 +349,11 @@
   .resume-text{
     font-family:'IBM Plex Serif',serif;font-style:italic;font-size:14.5px;line-height:1.65;
     color:var(--ink-700);white-space:pre-wrap;
+    /* Un résumé qui s'étoffe au fil du suivi commercial peut devenir très long — sans limite de
+       hauteur, la carte grandissait d'autant, repoussant tout le reste de la fiche (contacts,
+       opportunités...) très bas dans la page. Une hauteur maximale avec défilement propre à cette
+       zone garde le texte intégralement consultable, sans jamais rien couper ni tronquer. */
+    max-height:220px;overflow-y:auto;padding-right:4px;
   }
   .resume-edit textarea{
     width:100%;min-height:90px;border:1px solid var(--line);border-radius:7px;padding:10px;
