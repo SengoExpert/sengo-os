@@ -5825,10 +5825,14 @@ const STATUS_CLASS = {
 function buildHistory(cid){
   const items = [];
   companyNotes(cid).forEach(n => {
-    const base = n.texte && n.texte.length>140 ? n.texte.slice(0,140)+'…' : (n.texte || '');
     const photoTag = n.photos && n.photos.length ? ` [${n.photos.length} photo${n.photos.length>1?'s':''}]` : '';
     const typeTag = n.type && n.type!=='note' ? `${NOTE_TYPE_LABELS[n.type]} — ` : '';
-    items.push({ type:'note', date:n.date, text: typeTag + (base || '(sans texte)') + photoTag, ref:n });
+    const full = n.texte || '(sans texte)';
+    const truncated = n.texte && n.texte.length>140;
+    // Le texte complet est toujours conservé (fullText) — seul l'AFFICHAGE initial est raccourci
+    // (voir renderHistorique), pour permettre de le déplier sur place plutôt que de le perdre
+    // définitivement une fois réduit.
+    items.push({ type:'note', date:n.date, text: typeTag + (truncated ? full.slice(0,140)+'…' : full) + photoTag, fullText: typeTag + full + photoTag, truncated, noteId:n.id, ref:n });
   });
   DB.tasks.filter(t=>t.companyId===cid && t.statut==='terminee').forEach(t => items.push({
     type:'tache', date:t.dateTerminee || t.echeance,
@@ -7998,6 +8002,12 @@ function renderNotes(co, notes){
   </div>`;
 }
 
+let expandedHistoryNoteIds = new Set();
+function toggleHistoryExpand(noteId){
+  if(expandedHistoryNoteIds.has(noteId)) expandedHistoryNoteIds.delete(noteId);
+  else expandedHistoryNoteIds.add(noteId);
+  render();
+}
 function renderHistorique(items){
   const filters = [
     ['tous','Tout'], ['note','Notes'], ['tache','Tâches terminées'], ['devis','Devis'], ['opportunite','Opportunités']
@@ -8009,11 +8019,15 @@ function renderHistorique(items){
       ${filters.map(([k,l])=>`<button class="${state.historyFilter===k?'active':''}" onclick="state.historyFilter='${k}';render()">${l}</button>`).join('')}
     </div>
     ${items.length ? `<div class="timeline">
-      ${items.map(h=>`
+      ${items.map(h=>{
+        const expanded = h.truncated && h.noteId && expandedHistoryNoteIds.has(h.noteId);
+        return `
         <div class="hist-item type-${h.type}">
           <div class="hist-head"><span class="hist-date">${fmtDate(h.date)}</span><span class="hist-type">${h.type}</span></div>
-          <div class="hist-text">${esc(h.text)}</div>
-        </div>`).join('')}
+          <div class="hist-text">${esc(expanded ? h.fullText : h.text)}</div>
+          ${h.truncated ? `<button class="btn small ghost" style="margin-top:4px;" onclick="toggleHistoryExpand('${h.noteId}')">${expanded ? 'Voir moins' : 'Voir la note complète'}</button>` : ''}
+        </div>`;
+      }).join('')}
     </div>` : `<div class="empty-queue">Aucun événement pour ce filtre.</div>`}
   </div>`;
 }
@@ -8917,7 +8931,7 @@ function renderNoteTableBody(list){
               <td class="mono">${fmtDate(n.date)}</td>
               <td>${n.type && n.type!=='note' ? `<span class="note-type-badge" style="background:${NOTE_TYPE_COLORS[n.type]}">${NOTE_TYPE_LABELS[n.type]}</span>` : '<span class="ent-region">Note</span>'}</td>
               <td>${n._co ? esc(n._co.nom) : '—'}</td>
-              <td style="max-width:320px;">${n.texte ? esc(n.texte.slice(0,90))+(n.texte.length>90?'…':'') : '<span class="ent-region">(sans texte)</span>'}</td>
+              <td style="max-width:320px;">${n.texte ? (n.texte.length>90 ? `<span class="note-list-text">${esc(expandedHistoryNoteIds.has(n.id) ? n.texte : n.texte.slice(0,90)+'…')}</span> <button class="btn small ghost" onclick="event.stopPropagation();toggleHistoryExpand('${n.id}')">${expandedHistoryNoteIds.has(n.id)?'Voir moins':'Voir plus'}</button>` : esc(n.texte)) : '<span class="ent-region">(sans texte)</span>'}</td>
               <td>${n.photos && n.photos.length ? `
                 <div style="display:flex;gap:4px;">
                   ${n.photos.slice(0,3).map(p=>`<img src="${p.dataUrl}" title="${esc(p.titre||p.name||'')}" style="width:28px;height:28px;object-fit:cover;border-radius:4px;border:1px solid var(--line);cursor:pointer;" onclick="event.stopPropagation();openPhotoLightbox('${p.id}')">`).join('')}
