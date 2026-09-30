@@ -335,6 +335,16 @@
   .task-hero .btn.ghost-light{border:1px solid rgba(245,239,232,.3);color:#EDE1D6;background:transparent;}
   .task-hero .btn.ghost-light:hover{border-color:#fff;color:#fff;}
   .postpone-menu{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid rgba(245,239,232,.2);}
+  .task-switcher-list{display:flex;flex-direction:column;gap:4px;margin:8px 0 4px;max-height:220px;overflow-y:auto;}
+  .tsl-item{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    background:rgba(245,239,232,.06);border-radius:8px;padding:8px 10px;
+  }
+  .tsl-item.current{background:rgba(237,109,5,.18);}
+  .tsl-info{flex:1;min-width:0;cursor:pointer;}
+  .tsl-title{font-size:13px;font-weight:600;color:#F5EFE8;}
+  .tsl-badge{font-size:10px;font-weight:700;color:var(--brand-orange);background:rgba(237,109,5,.18);border-radius:4px;padding:1px 5px;margin-left:4px;}
+  .tsl-meta{font-size:11.5px;color:rgba(245,239,232,.65);margin-top:1px;}
   .postpone-menu button{
     font-size:12px;padding:6px 12px;border-radius:20px;border:1px solid rgba(245,239,232,.3);
     background:transparent;color:#EDE1D6;font-weight:600;
@@ -633,6 +643,91 @@
     border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:13px;width:100%;
   }
   .inline-form-actions{display:flex;justify-content:flex-end;gap:6px;}
+
+  /* ===== Services des contacts, recherche d'adresses, campagnes email ===== */
+  .svc-chip{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:20px;white-space:nowrap;vertical-align:1px;background:var(--panel-2);color:var(--ink-500);border:1px solid var(--line);}
+  .svc-chip.svc-achats{background:var(--brand-orange-wash);color:var(--brand-orange-dark);border-color:transparent;}
+  .svc-chip.svc-maintenance{background:var(--blue-wash);color:var(--blue);border-color:transparent;}
+  .svc-chip.svc-production{background:var(--amber-wash);color:var(--amber);border-color:transparent;}
+  .svc-chip.svc-logistique{background:#EEEAF6;color:#6247AA;border-color:transparent;}
+  .svc-chip.svc-qualite{background:var(--green-wash);color:var(--green);border-color:transparent;}
+  .svc-chip.svc-direction{background:var(--ink-900);color:#fff;border-color:transparent;}
+  .svc-chip.svc-none{border-style:dashed;}
+  .camp-badge{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:20px;background:var(--panel-2);color:var(--ink-500);border:1px solid var(--line);white-space:nowrap;}
+  .camp-badge.warn{background:var(--amber-wash);color:var(--amber);border-color:transparent;}
+  .camp-badge.off{background:var(--red-wash);color:var(--red);border-color:transparent;}
+  .find-panel{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:10px 12px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;}
+  .find-row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;}
+  .find-label{font-size:11.5px;font-weight:700;color:var(--ink-700);min-width:88px;padding-top:4px;}
+  .find-chips{display:flex;gap:5px;flex-wrap:wrap;flex:1;}
+  .svc-cover{font-size:11px;padding:2px 8px;border-radius:20px;border:1px dashed var(--ink-300);color:var(--ink-500);}
+  .svc-cover.ok{border:1px solid transparent;background:var(--green-wash);color:var(--green);font-weight:600;}
+  .find-hint{font-size:12px;color:var(--ink-700);line-height:1.45;}
+  .find-actions{display:flex;justify-content:flex-end;gap:6px;}
+  .email-row{display:flex;gap:6px;}
+  .email-row input{flex:1;min-width:0;}
+  .email-row .btn{white-space:nowrap;}
+  .email-deduced-hint{font-size:11.5px;color:var(--amber);background:var(--amber-wash);border-radius:6px;padding:6px 8px;}
+  .optout-check{font-size:12.5px;color:var(--ink-700);display:flex;gap:6px;align-items:center;}
+  .inline-form .optout-check input{width:auto;}
+  .camp-modal{width:760px;max-width:calc(100% - 20px);display:flex;flex-direction:column;}
+  .camp-head{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .camp-steps{display:flex;border-bottom:1px solid var(--line);padding:0 14px;overflow-x:auto;}
+  .camp-steps button{background:none;border:none;border-bottom:2px solid transparent;padding:11px 10px;font-size:13px;font-weight:600;color:var(--ink-500);display:flex;align-items:center;gap:7px;white-space:nowrap;cursor:pointer;}
+  .camp-steps button span{width:20px;height:20px;border-radius:50%;background:var(--panel-2);border:1px solid var(--line);font-size:11px;display:inline-flex;align-items:center;justify-content:center;}
+  .camp-steps button.active{color:var(--ink-900);border-bottom-color:var(--brand-orange);}
+  .camp-steps button.active span{background:var(--brand-orange);border-color:var(--brand-orange);color:#fff;}
+  .camp-steps button:disabled{cursor:default;opacity:.6;}
+  .camp-body{gap:12px;}
+  .camp-info{font-size:12.5px;color:var(--ink-700);background:var(--blue-wash);border-radius:8px;padding:8px 10px;line-height:1.45;}
+  .camp-warn{font-size:12.5px;color:var(--red);background:var(--red-wash);border-radius:8px;padding:8px 10px;line-height:1.45;}
+  .camp-svc-filter,.camp-vars{display:flex;gap:5px;flex-wrap:wrap;align-items:center;}
+  .svc-toggle{font-size:11.5px;padding:4px 10px;border-radius:20px;border:1px solid var(--line);background:var(--panel);font-weight:600;color:var(--ink-700);cursor:pointer;}
+  .svc-toggle.active{background:var(--ink-900);color:#fff;border-color:var(--ink-900);}
+  .camp-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--ink-700);}
+  .camp-tools label{display:flex;gap:6px;align-items:center;}
+  .camp-list{border:1px solid var(--line);border-radius:8px;max-height:46vh;overflow-y:auto;}
+  .camp-row{display:grid;grid-template-columns:22px minmax(0,1.3fr) minmax(0,1.4fr) 150px 34px;gap:8px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line);font-size:12.5px;}
+  .camp-row:last-child{border-bottom:none;}
+  .camp-row.off{opacity:.55;}
+  .camp-name{font-weight:600;color:var(--ink-900);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .camp-sub{font-size:11.5px;color:var(--ink-500);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .camp-mail{color:var(--ink-700);overflow-wrap:anywhere;display:flex;gap:4px;flex-wrap:wrap;align-items:center;}
+  .camp-svc{font-size:12px;border:1px solid var(--line);border-radius:6px;padding:3px 4px;width:100%;background:var(--panel);}
+  .camp-input{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 10px;font-size:13.5px;}
+  .camp-input:focus{outline:none;border-color:var(--teal);}
+  .camp-check{font-size:12.5px;color:var(--ink-700);display:flex;gap:7px;align-items:flex-start;line-height:1.4;}
+  .camp-check input{margin-top:2px;}
+  .camp-preview-wrap{border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .camp-prev-head{display:flex;gap:8px;align-items:center;padding:8px 10px;background:var(--panel-2);border-bottom:1px solid var(--line);}
+  .camp-prev-head select{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12.5px;}
+  #camp-preview{padding:10px 12px;max-height:280px;overflow-y:auto;}
+  .camp-prev-meta{font-size:12px;color:var(--ink-700);margin-bottom:3px;}
+  .camp-prev-body{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);}
+  .camp-options{display:flex;flex-direction:column;gap:8px;}
+  .camp-options.disabled{opacity:.6;}
+  .camp-follow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--ink-700);}
+  .camp-follow select{border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12.5px;}
+  .camp-follow .hint{font-size:11px;color:var(--ink-500);}
+  #camp-progress{display:flex;flex-direction:column;gap:8px;align-items:flex-start;}
+  #camp-progress:empty{display:none;}
+  .camp-bar{width:100%;height:8px;border-radius:8px;background:var(--panel-2);border:1px solid var(--line);overflow:hidden;}
+  .camp-bar div{height:100%;background:var(--brand-orange);transition:width .3s;}
+  .camp-running{font-size:13px;font-weight:600;color:var(--ink-900);}
+  .camp-done{font-size:13px;font-weight:600;color:var(--green);line-height:1.45;}
+  .camp-errors{font-size:12px;color:var(--ink-700);width:100%;}
+  .camp-errors summary{cursor:pointer;color:var(--red);font-weight:600;}
+  .camp-errors div{padding:3px 0;border-bottom:1px solid var(--line);}
+  .btn.camp-confirm{background:var(--red);border-color:var(--red);}
+  .camp-modal .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .hist-item.type-email::before{background:var(--green);}
+  @media (max-width: 700px){
+    .camp-row{grid-template-columns:22px minmax(0,1fr) 34px;}
+    .camp-row .camp-mail{grid-column:2 / 4;}
+    .camp-row .camp-svc{grid-column:2 / 4;}
+    .camp-row > .btn{grid-row:1;grid-column:3;}
+    .camp-modal .modal-foot{flex-wrap:wrap;}
+  }
   /* ===== Entreprises ===== */
   .ent-page{display:flex;flex-direction:column;gap:14px;}
   .ent-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
@@ -790,7 +885,7 @@ function relLabel(dstr){
 }
 
 /* ---------------------------- DATA ---------------------------- */
-const APP_VERSION = '2026-09-28 · build c (recherche renforcée)';
+const APP_VERSION = '2026-09-30 · build d (tâches multiples par entreprise)';
 console.log('SENGO OS — version', APP_VERSION);
 let DB = {
   companies: [
@@ -5799,7 +5894,7 @@ let state = {
   entFilters: {secteur:'tous', region:'tous', departement:'tous', taille:'tous', potentiel:'tous', groupe:'tous', statutClient:'tous', q:''},
   // Contacts (liste triable/filtrable)
   ctSort: {field:'nom', dir:'asc'},
-  ctFilters: {role:'tous', q:''},
+  ctFilters: {role:'tous', service:'tous', q:''},
 };
 function setNav(n){
   state.activeNav = n;
@@ -5858,7 +5953,7 @@ function buildHistory(cid){
     // Le texte complet est toujours conservé (fullText) — seul l'AFFICHAGE initial est raccourci
     // (voir renderHistorique), pour permettre de le déplier sur place plutôt que de le perdre
     // définitivement une fois réduit.
-    items.push({ type:'note', date:n.date, text: typeTag + (truncated ? full.slice(0,140)+'…' : full) + photoTag, fullText: typeTag + full + photoTag, truncated, noteId:n.id, ref:n });
+    items.push({ type: n.type==='email' ? 'email' : 'note', date:n.date, text: typeTag + (truncated ? full.slice(0,140)+'…' : full) + photoTag, fullText: typeTag + full + photoTag, truncated, noteId:n.id, ref:n });
   });
   DB.tasks.filter(t=>t.companyId===cid && t.statut==='terminee').forEach(t => items.push({
     type:'tache', date:t.dateTerminee || t.echeance,
@@ -6236,6 +6331,7 @@ function renderNotesPageForm(){
         <option value="note" ${pendingNote.type==='note'?'selected':''}>Note libre</option>
         <option value="visite" ${pendingNote.type==='visite'?'selected':''}>Visite</option>
         <option value="audit" ${pendingNote.type==='audit'?'selected':''}>Audit</option>
+        <option value="email" ${pendingNote.type==='email'?'selected':''}>Email important</option>
       </select>
       <textarea id="new-note-text" placeholder="Écrire une note libre pendant ou après un échange…" oninput="pendingNote.text=this.value" data-focus-key="note-text">${esc(pendingNote.text)}</textarea>
       ${pendingNote.photos.length ? `
@@ -6862,11 +6958,11 @@ function changeOppStatus(oid, value){
 }
 
 let addingContactFor = null;
-let contactForm = {prenom:'', nom:'', fonction:'', tel:'', mobile:'', email:'', role:'autre', notes:''};
+let contactForm = {prenom:'', nom:'', fonction:'', tel:'', mobile:'', email:'', role:'autre', notes:'', service:'', optOut:false, emailDeduit:false};
 function resetContactForm(k){
   contactForm = k
-    ? {prenom:k.prenom||'', nom:k.nom||'', fonction:k.fonction||'', tel:k.tel||'', mobile:k.mobile||'', email:k.email||'', role:k.role||'autre', notes:k.notes||''}
-    : {prenom:'', nom:'', fonction:'', tel:'', mobile:'', email:'', role:'autre', notes:''};
+    ? {prenom:k.prenom||'', nom:k.nom||'', fonction:k.fonction||'', tel:k.tel||'', mobile:k.mobile||'', email:k.email||'', role:k.role||'autre', notes:k.notes||'', service:k.service||'', optOut:!!k.optOut, emailDeduit:!!k.emailDeduit}
+    : {prenom:'', nom:'', fonction:'', tel:'', mobile:'', email:'', role:'autre', notes:'', service:'', optOut:false, emailDeduit:false};
 }
 function toggleAddContact(cid){
   addingContactFor = addingContactFor === cid ? null : cid;
@@ -6882,14 +6978,18 @@ function submitContact(cid, kid){
   const email = normalizeEmail(contactForm.email);
   const role = contactForm.role;
   const notes = contactForm.notes.trim();
-  if(!prenom){ toast('Le prénom est requis.'); return; }
+  const service = contactForm.service || '';
+  const optOut = !!contactForm.optOut;
+  const emailDeduit = !!(contactForm.emailDeduit && email);
+  if(!prenom && !email){ toast('Le prénom est requis (ou au moins une adresse email pour une adresse générique).'); return; }
   if(kid){
     const k = byId(DB.contacts, kid);
-    Object.assign(k, {prenom, nom, fonction, tel, mobile, email, role, notes});
+    const optOutDate = optOut ? (k.optOut ? (k.optOutDate||todayStr) : todayStr) : '';
+    Object.assign(k, {prenom, nom, fonction, tel, mobile, email, role, notes, service, optOut, optOutDate, emailDeduit});
     editingContactId = null;
     toast('Contact mis à jour.');
   } else {
-    DB.contacts.push({id:'k'+(DB.contacts.length+1)+'-'+Math.random().toString(36).slice(2,5), companyId:cid, prenom, nom, fonction, tel, mobile, email, role, notes});
+    DB.contacts.push({id:'k'+(DB.contacts.length+1)+'-'+Math.random().toString(36).slice(2,5), companyId:cid, prenom, nom, fonction, tel, mobile, email, role, notes, service, optOut, optOutDate: optOut ? todayStr : '', emailDeduit});
     addingContactFor = null;
     toast('Contact ajouté.');
   }
@@ -7317,16 +7417,50 @@ function renderInlineTaskForm(cid){
   </div>`;
 }
 
+let showTaskSwitcherFor = null;
+function toggleTaskSwitcher(cid){
+  showTaskSwitcherFor = showTaskSwitcherFor === cid ? null : cid;
+  render();
+}
+function switchToCompanyTask(taskId){
+  state.selectedTaskId = taskId;
+  render();
+}
 function renderTaskHero(task, co){
   const opp = task.opportunityId ? byId(DB.opportunities, task.opportunityId) : null;
   const ct = task.contactId ? byId(DB.contacts, task.contactId) : null;
   const menuOpen = showPostponeMenuFor === task.id;
+  // Toutes les tâches ouvertes de cette même entreprise (companyTasks les trie déjà par
+  // échéance) — sert à la fois au compteur, aux flèches précédent/suivant, et à la liste
+  // dépliable ci-dessous, pour détecter et supprimer facilement un doublon.
+  const siblings = companyTasks(co.id);
+  const idx = siblings.findIndex(t=>t.id===task.id);
+  const switcherOpen = showTaskSwitcherFor === co.id;
   return `
   <div class="card task-hero">
-    <div class="tag-label">Tâche en cours ${relLabel(task.echeance) === "Aujourd'hui" ? "· pour aujourd'hui" : task.echeance<todayStr ? "· en retard" : "· à venir"}</div>
+    <div class="tag-label" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+      <span>Tâche en cours ${relLabel(task.echeance) === "Aujourd'hui" ? "· pour aujourd'hui" : task.echeance<todayStr ? "· en retard" : "· à venir"}</span>
+      ${siblings.length > 1 ? `
+      <span style="display:flex;align-items:center;gap:4px;">
+        <button class="btn small ghost" title="Tâche ouverte précédente de cette entreprise" onclick="switchToCompanyTask('${siblings[(idx-1+siblings.length)%siblings.length].id}')">◀</button>
+        <button class="btn small ghost" onclick="toggleTaskSwitcher('${co.id}')" title="Voir toutes les tâches ouvertes de cette entreprise">${idx+1}/${siblings.length} tâches ouvertes ${switcherOpen?'▲':'▼'}</button>
+        <button class="btn small ghost" title="Tâche ouverte suivante de cette entreprise" onclick="switchToCompanyTask('${siblings[(idx+1)%siblings.length].id}')">▶</button>
+      </span>` : ''}
+    </div>
     <div class="th-title">${esc(task.titre)}</div>
     ${task.categorie ? `<span class="pill" style="margin:2px 0 6px;display:inline-block;">${esc(task.categorie)}</span>` : ''}
     <div class="th-meta">${ct?esc(ct.prenom+' '+ct.nom)+' · ':''}${opp?esc(opp.intitule)+' · ':''}échéance ${fmtDate(task.echeance)}</div>
+    ${switcherOpen ? `
+    <div class="task-switcher-list">
+      ${siblings.map(t=>`
+        <div class="tsl-item ${t.id===task.id?'current':''}">
+          <div class="tsl-info" onclick="switchToCompanyTask('${t.id}')">
+            <div class="tsl-title">${esc(t.titre)}${t.id===task.id?' <span class="tsl-badge">en cours</span>':''}</div>
+            <div class="tsl-meta">échéance ${fmtDate(t.echeance)}${t.categorie?' · '+esc(t.categorie):''}</div>
+          </div>
+          <button class="btn small danger-ghost" title="Supprimer cette tâche (doublon ?)" onclick="event.stopPropagation();deleteTaskDirect('${t.id}')">🗑</button>
+        </div>`).join('')}
+    </div>` : ''}
     <div class="th-actions">
       <button class="btn primary" onclick="openFinish('${task.id}')">✓ Terminer l'action</button>
       <button class="btn ghost-light" onclick="togglePostponeMenu('${task.id}')">Reporter ${menuOpen?'▲':'▼'}</button>
@@ -7443,13 +7577,14 @@ function renderEntreprise(co){
 function renderContacts(co, contacts){
   return `
   <div class="card" id="contact-block">
-    <h2>Contacts <button class="btn ghost small" onclick="triggerScanBusinessCard('existing','${co.id}')" ${state.ocrStatus?'disabled':''} style="margin-right:4px;">${state.ocrStatus?'⏳':'📇 Scanner une carte'}</button><button class="btn ghost small" onclick="toggleAddContact('${co.id}')">+ Ajouter</button></h2>
+    <h2>Contacts <button class="btn ghost small" onclick="toggleFindContacts('${co.id}')" title="Recherches préparées et format des adresses de l'entreprise" style="margin-right:4px;">🔎 Trouver</button><button class="btn ghost small" onclick="triggerScanBusinessCard('existing','${co.id}')" ${state.ocrStatus?'disabled':''} style="margin-right:4px;">${state.ocrStatus?'⏳':'📇 Scanner une carte'}</button><button class="btn ghost small" onclick="toggleAddContact('${co.id}')">+ Ajouter</button></h2>
+    ${renderFindContactsPanel(co)}
     ${contacts.length ? contacts.map(k => editingContactId===k.id ? renderContactForm(co.id, k) : `
       <div class="contact-card">
         <div class="ct-top">
           <div>
-            <div class="ct-name">${esc(k.prenom)} ${esc(k.nom)}</div>
-            <div class="ct-fn">${esc(k.fonction)}</div>
+            <div class="ct-name">${esc(contactDisplayName(k))}</div>
+            <div class="ct-fn">${esc(k.fonction)}${k.fonction?' ':''}${renderServiceChip(k)}</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
             <span class="ct-role ${k.role}">${k.role}</span>
@@ -7461,6 +7596,9 @@ function renderContacts(co, contacts){
           ${k.tel && k.tel!=='—' ? `<a class="ct-link" href="tel:${esc(k.tel)}">📞 ${esc(k.tel)}</a>`:''}
           ${k.mobile ? `<a class="ct-link" href="tel:${esc(k.mobile)}">📱 ${esc(k.mobile)}</a>`:''}
           ${k.email ? `<a class="ct-link" href="mailto:${esc(normalizeEmail(k.email))}">✉️ ${esc(k.email)}</a>`:''}
+          ${k.emailDeduit ? `<span class="camp-badge warn" title="Adresse déduite du format de l'entreprise, à confirmer">déduite</span>` : ''}
+          ${k.optOut ? `<span class="camp-badge off">ne plus contacter</span>` : ''}
+          ${k.dernierMailing ? `<span class="camp-badge" title="Dernier email groupé">email le ${fmtDate(k.dernierMailing)}</span>` : ''}
         </div>
         ${k.notes ? `<div class="ct-notes">${esc(k.notes)}</div>` : ''}
         ${movingContactId===k.id ? `
@@ -7518,13 +7656,22 @@ function renderContactForm(cid, k){
       <input id="nc-tel" placeholder="Téléphone fixe" value="${esc(contactForm.tel)}" oninput="contactForm.tel=this.value" data-focus-key="nc-tel">
       <input id="nc-mobile" placeholder="Portable" value="${esc(contactForm.mobile)}" oninput="contactForm.mobile=this.value" data-focus-key="nc-mobile">
     </div>
-    <input id="nc-email" placeholder="Email" value="${esc(contactForm.email)}" oninput="contactForm.email=this.value" data-focus-key="nc-email">
+    <div class="email-row">
+      <input id="nc-email" placeholder="Email" value="${esc(contactForm.email)}" oninput="contactForm.email=this.value;contactForm.emailDeduit=false" data-focus-key="nc-email">
+      <button class="btn small" type="button" title="Propose l'adresse d'après le format des adresses de l'entreprise (prenom.nom@…)" onclick="contactForm.prenom=document.getElementById('nc-prenom').value;contactForm.nom=document.getElementById('nc-nom').value;deduceContactEmail('${cid}')">✨ Déduire l'email</button>
+    </div>
+    ${contactForm.emailDeduit ? `<div class="email-deduced-hint">Adresse déduite, non confirmée : elle ne sera pas cochée par défaut dans les campagnes tant que vous ne l'avez pas vérifiée (modifiez-la ou retapez-la pour la confirmer).</div>` : ''}
     <select id="nc-role" onchange="contactForm.role=this.value">
       <option value="decideur" ${contactForm.role==='decideur'?'selected':''}>Décideur</option>
       <option value="prescripteur" ${contactForm.role==='prescripteur'?'selected':''}>Prescripteur</option>
       <option value="utilisateur" ${contactForm.role==='utilisateur'?'selected':''}>Utilisateur</option>
       <option value="autre" ${contactForm.role==='autre'?'selected':''}>Autre</option>
     </select>
+    <select id="nc-service" onchange="contactForm.service=this.value" title="Service du contact, utilisé pour cibler les campagnes email">
+      <option value="" ${!contactForm.service?'selected':''}>Service : détection automatique${(() => { const a = contactService({fonction:contactForm.fonction, email:contactForm.email, prenom:contactForm.prenom}); return a ? ' ('+esc(serviceLabel(a))+')' : ''; })()}</option>
+      ${SERVICE_ORDER.filter(Boolean).map(v => `<option value="${v}" ${contactForm.service===v?'selected':''}>${esc(CONTACT_SERVICES[v])}</option>`).join('')}
+    </select>
+    <label class="optout-check"><input type="checkbox" ${contactForm.optOut?'checked':''} onchange="contactForm.optOut=this.checked"> Ne plus lui envoyer d'emails groupés</label>
     <textarea id="nc-notes" placeholder="Notes utiles (facultatif)" style="min-height:40px;" oninput="contactForm.notes=this.value" data-focus-key="contact-notes">${esc(contactForm.notes)}</textarea>
     <div class="inline-form-actions">
       ${isEdit ? `<button class="btn danger-ghost" onclick="deleteContact('${k.id}')" style="margin-right:auto;">Supprimer</button>` : ''}
@@ -7954,8 +8101,8 @@ function performDeleteDoc(docId){
 }
 
 let noteTypeFilter = 'tous';
-const NOTE_TYPE_LABELS = {note:'Note', visite:'Visite', audit:'Audit'};
-const NOTE_TYPE_COLORS = {note:'var(--ink-500)', visite:'var(--blue)', audit:'#6247AA'};
+const NOTE_TYPE_LABELS = {note:'Note', visite:'Visite', audit:'Audit', email:'Email'};
+const NOTE_TYPE_COLORS = {note:'var(--ink-500)', visite:'var(--blue)', audit:'#6247AA', email:'var(--green)'};
 function setNoteTypeFilter(t){
   noteTypeFilter = t;
   render();
@@ -7968,7 +8115,7 @@ function renderNotes(co, notes){
   <div class="card" id="note-block">
     <h2>Notes ${(counts.visite||counts.audit) ? `<span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--ink-500);">${counts.visite} visite(s) · ${counts.audit} audit(s)</span>` : ''}</h2>
     <div class="note-filters">
-      ${['tous','note','visite','audit'].map(t=>`<button class="${noteTypeFilter===t?'active':''}" onclick="setNoteTypeFilter('${t}')">${t==='tous'?'Tout':NOTE_TYPE_LABELS[t]+'s'}</button>`).join('')}
+      ${['tous','note','visite','audit','email'].map(t=>`<button class="${noteTypeFilter===t?'active':''}" onclick="setNoteTypeFilter('${t}')">${t==='tous'?'Tout':NOTE_TYPE_LABELS[t]+'s'}</button>`).join('')}
     </div>
     ${filtered.length ? filtered.slice(0,6).map(n=>`
       <div class="note-item">
@@ -8008,6 +8155,7 @@ function renderNotes(co, notes){
         <option value="note" ${pendingNote.type==='note'?'selected':''}>Note libre</option>
         <option value="visite" ${pendingNote.type==='visite'?'selected':''}>Visite</option>
         <option value="audit" ${pendingNote.type==='audit'?'selected':''}>Audit</option>
+        <option value="email" ${pendingNote.type==='email'?'selected':''}>Email important</option>
       </select>
       <textarea id="new-note-text" placeholder="Écrire une note libre pendant ou après un échange…" oninput="pendingNote.text=this.value" data-focus-key="note-text">${esc(pendingNote.text)}</textarea>
       ${pendingNote.photos.length ? `
@@ -8038,7 +8186,7 @@ function toggleHistoryExpand(noteId){
 }
 function renderHistorique(items){
   const filters = [
-    ['tous','Tout'], ['note','Notes'], ['tache','Tâches terminées'], ['devis','Devis'], ['opportunite','Opportunités']
+    ['tous','Tout'], ['note','Notes'], ['email','Emails'], ['tache','Tâches terminées'], ['devis','Devis'], ['opportunite','Opportunités']
   ];
   return `
   <div class="card">
@@ -8139,14 +8287,17 @@ function renderEntreprisesPage(){
           <div class="import-menu">
             <button onclick="importMenuOpen=false;triggerImportOneNote()">📓 Notes OneNote</button>
             <button onclick="importMenuOpen=false;triggerImportContacts()">📱 Mes contacts (.vcf)</button>
+            <button onclick="importMenuOpen=false;triggerImportContactFile()">📋 Fichier de contacts (Excel, CSV : Dropcontact, Kaspr, salon…)</button>
             <button onclick="importMenuOpen=false;triggerImportBackup()">💾 Fichier de sauvegarde</button>
           </div>` : ''}
         </div>
         <button class="btn" onclick="triggerScanBusinessCard('new')" ${state.ocrStatus?'disabled':''}>${state.ocrStatus?'⏳ Lecture…':'📇 Scanner une carte'}</button>
+        <button class="btn" onclick="openMailingForEntreprises()" title="Campagne email vers les contacts des entreprises affichées">📧 Mailing sur ces entreprises</button>
         <button class="btn primary" onclick="toggleAddCompany()">${addingCompanyOpen?'Annuler':'+ Créer une entreprise'}</button>
       </div>
       <input type="file" id="import-backup-input" accept="application/json" style="display:none;" onchange="importDataBackup(this)">
       <input type="file" id="import-contacts-input" accept=".vcf,.vcard,text/vcard" style="display:none;" onchange="importContactsVCF(this)">
+      <input type="file" id="import-contactfile-input" accept=".csv,.txt,.xlsx,.xls,.xlsm,text/csv" style="display:none;" onchange="importContactFile(this)">
       <input type="file" id="import-onenote-input" accept=".docx,.pdf" style="display:none;" onchange="importOneNoteDocx(this)">
     </div>
 
@@ -8270,6 +8421,7 @@ function filteredSortedContacts(){
   let list = DB.contacts.map(k => ({...k, _co: byId(DB.companies, k.companyId)}));
   list = list.filter(k =>
     (f.role==='tous' || k.role===f.role) &&
+    (!f.service || f.service==='tous' || contactService(k)===f.service) &&
     (!f.q || (k.prenom+' '+k.nom+' '+(k._co?k._co.nom:'')).toLowerCase().includes(f.q.toLowerCase()))
   );
   const {field, dir} = state.ctSort;
@@ -8285,15 +8437,16 @@ function filteredSortedContacts(){
   return list;
 }
 function resetCtFilters(){
-  state.ctFilters = {role:'tous', q:''};
+  state.ctFilters = {role:'tous', service:'tous', q:''};
   render();
 }
 
 function renderContactsPage(){
   const list = filteredSortedContacts();
   const f = state.ctFilters;
-  const isFiltered = f.role!=='tous' || f.q;
+  const isFiltered = f.role!=='tous' || (f.service && f.service!=='tous') || f.q;
   const th = (label, field) => `<th onclick="setCtSort('${field}')">${label}${ctSortArrow(field)}</th>`;
+  const withEmail = list.filter(k => isValidEmail(k.email) && !k.optOut).length;
 
   return `
   <div class="ent-page">
@@ -8302,6 +8455,9 @@ function renderContactsPage(){
         <div class="co-name" style="font-size:19px;">Contacts</div>
         <div style="font-size:12.5px;color:var(--ink-500);" id="ct-count">${list.length} sur ${DB.contacts.length} — triez une colonne en cliquant sur son en-tête</div>
       </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn" onclick="openMailingForContacts()" ${withEmail?'':'disabled'} title="Campagne email vers les contacts affichés">📧 Mailing sur ces contacts (${withEmail})</button>
+      </div>
     </div>
 
     <div class="card ent-filters">
@@ -8309,6 +8465,10 @@ function renderContactsPage(){
       <select onchange="state.ctFilters.role=this.value;render()">
         <option value="tous" ${f.role==='tous'?'selected':''}>Tous rôles</option>
         ${Object.entries(ROLE_LABELS).map(([k,v])=>`<option value="${k}" ${f.role===k?'selected':''}>${v}</option>`).join('')}
+      </select>
+      <select onchange="state.ctFilters.service=this.value;render()">
+        <option value="tous" ${(!f.service||f.service==='tous')?'selected':''}>Tous services</option>
+        ${SERVICE_ORDER.map(v=>`<option value="${v}" ${f.service===v?'selected':''}>${esc(serviceLabel(v))}</option>`).join('')}
       </select>
       ${isFiltered ? `<button class="btn small" onclick="resetCtFilters()">Réinitialiser</button>` : ''}
     </div>
@@ -8341,7 +8501,7 @@ function renderCtTableBody(list){
               <td>
                 <div class="ent-name">${esc(k.prenom)} ${esc(k.nom)}</div>
               </td>
-              <td>${esc(k.fonction)||'—'}</td>
+              <td>${esc(k.fonction)||'—'} ${renderServiceChip(k)}</td>
               <td>${k._co? esc(k._co.nom) : '—'}</td>
               <td><span class="ct-role ${k.role}" style="display:inline-block;">${esc(ROLE_LABELS[k.role]||k.role)}</span></td>
               <td class="mono">
@@ -9021,54 +9181,927 @@ function selectFilteredForTour(){
   render();
 }
 
-/* ---------------------------- MAILING SUR UNE SÉLECTION (secteur, filtres...) ---------------------------- */
-let mailingListOpen = false;
-let mailingEmails = [];
-function openMailingForFiltered(){
-  const companies = filteredMapCompaniesAll();
-  const companyIds = new Set(companies.map(c=>c.id));
-  const emails = [...new Set(
-    DB.contacts.filter(k => companyIds.has(k.companyId) && k.email).map(k=>k.email.trim().toLowerCase())
-  )];
-  if(!emails.length){ toast('Aucun email trouvé parmi les contacts de ces résultats.'); return; }
-  mailingEmails = emails;
+/* ======================================================================
+   CONTACTS PAR SERVICE, RECHERCHE D'ADRESSES, IMPORT ENRICHI ET CAMPAGNES EMAIL
+   ----------------------------------------------------------------------
+   1. Chaque contact reçoit un « service » (Achats, Maintenance…) : déduit automatiquement de sa
+      fonction ou de son adresse, et corrigeable en un clic (champ k.service, prioritaire).
+   2. « Trouver des contacts » sur la fiche entreprise : recherches préparées (site, LinkedIn,
+      Pappers) + détection du format des adresses de l'entreprise (prenom.nom@…), pour proposer
+      l'adresse d'un nouveau contact. Une adresse ainsi proposée est marquée k.emailDeduit tant
+      qu'elle n'a pas été confirmée (non cochée par défaut dans les campagnes).
+   3. Import de fichiers de contacts (CSV ou Excel : exports Dropcontact, Kaspr, salons, listes
+      de prospection…) avec rattachement automatique aux entreprises existantes.
+   4. Campagne email : sélection des destinataires, message personnalisé, envoi individuel depuis
+      l'Outlook du compte Microsoft connecté (Microsoft Graph), inscription dans l'historique de
+      chaque entreprise et création de la relance dans la file de travail.
+   ====================================================================== */
+
+const CONTACT_SERVICES = {
+  achats:'Achats', maintenance:'Maintenance / technique', production:'Production', logistique:'Logistique',
+  qualite:'Qualité / HSE', direction:'Direction', autre:'Autre service', generique:'Adresse générique'
+};
+const SERVICE_ORDER = ['achats','maintenance','production','logistique','qualite','direction','autre','generique',''];
+const TARGET_SERVICES = ['achats','maintenance','production','logistique','qualite','direction'];
+function serviceLabel(s){ return s ? (CONTACT_SERVICES[s] || s) : 'À qualifier'; }
+
+// Adresses de service ou de standard (contact@, accueil@…) — le préfixe suffit à les reconnaître.
+const GENERIC_EMAIL_RX = /^(contact|contacts|info|infos|information|accueil|bonjour|hello|commercial|commerciale|vente|ventes|admin|administration|secretariat|direction|compta|comptabilite|office|mail|courrier|sav|service|services|standard|reception|devis|commande|commandes|agence|siege)([._-]|\d|$)/;
+const WEBMAIL_DOMAINS = new Set(['gmail.com','orange.fr','wanadoo.fr','free.fr','hotmail.com','hotmail.fr','yahoo.fr','yahoo.com','outlook.com','outlook.fr','live.fr','live.com','laposte.net','sfr.fr','neuf.fr','icloud.com','me.com','aol.com','gmx.fr','bbox.fr','numericable.fr','msn.com','club-internet.fr','aliceadsl.fr']);
+
+function normTxt(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function isValidEmail(e){ return /^[^\s@;,<>]+@[^\s@;,<>]+\.[a-z]{2,}$/i.test(normalizeEmail(e||'')); }
+function emailDomain(e){ const m = normalizeEmail(e||'').toLowerCase().match(/@([^@\s]+)$/); return m ? m[1] : ''; }
+function siteDomain(site){
+  if(!site) return '';
+  let s = String(site).trim().toLowerCase().replace(/^https?:\/\//,'').replace(/^www\./,'');
+  s = s.split(/[\/?#\s]/)[0];
+  return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(s) ? s : '';
+}
+function contactDisplayName(k){
+  const n = [k.prenom, k.nom].map(x=>(x||'').trim()).filter(Boolean).join(' ');
+  return n || (k.email ? normalizeEmail(k.email) : '(sans nom)');
+}
+
+function detectServiceFromText(t){
+  if(!t) return '';
+  if(/achat|acheteu|approvision|purchas|buyer|procurement/.test(t)) return 'achats';
+  if(/qualit|\bhse\b|qhse|\bqse\b|securite|environnement|\brse\b/.test(t)) return 'qualite';
+  if(/mainten|travaux neufs|technique|technicien|services? generaux|infrastructure|energie|electri|mecani|atelier|methodes|bureau d.?etude/.test(t)) return 'maintenance';
+  if(/logisti|expedition|entrepot|magasin|supply|transport|stock|\bquai\b|\bflux\b/.test(t)) return 'logistique';
+  if(/production|fabrication|usine|exploitation|conditionnement|chef de ligne|operations|industriel/.test(t)) return 'production';
+  if(/gerant|directeur|directrice|\bdg\b|pdg|president|dirigeant|fondat|\bceo\b|associe|proprietaire|chef d.?entreprise|patron/.test(t)) return 'direction';
+  return '';
+}
+// Service effectif d'un contact : le choix manuel (k.service) prime toujours sur la détection.
+function contactService(k){
+  if(!k) return '';
+  if(k.service) return k.service;
+  const f = normTxt(k.fonction);
+  const fromFn = detectServiceFromText(f);
+  if(fromFn) return fromFn;
+  const local = normTxt((normalizeEmail(k.email||'')).split('@')[0]);
+  if(local && (k.email||'').includes('@')){
+    if(/^(achat|purchas|appro)/.test(local)) return 'achats';
+    if(/^(maintenance|technique|travaux)/.test(local)) return 'maintenance';
+    if(/^(logisti|expedition|transport)/.test(local)) return 'logistique';
+    if(/^(qualite|hse|qhse)/.test(local)) return 'qualite';
+    if(/^production/.test(local)) return 'production';
+    if(GENERIC_EMAIL_RX.test(local)) return 'generique';
+  }
+  return f ? 'autre' : '';
+}
+function renderServiceChip(k){
+  const s = contactService(k);
+  return `<span class="svc-chip svc-${s||'none'}" title="${k.service ? 'Service choisi manuellement' : 'Service détecté automatiquement'}">${esc(serviceLabel(s))}</span>`;
+}
+function setContactService(kid, value){
+  const k = byId(DB.contacts, kid);
+  if(!k) return;
+  k.service = value || '';
+  render();
+}
+function toggleContactOptOut(kid){
+  const k = byId(DB.contacts, kid);
+  if(!k) return;
+  k.optOut = !k.optOut;
+  k.optOutDate = k.optOut ? todayStr : '';
+  if(k.optOut && camp) camp.selected.delete(kid);
+  toast(k.optOut ? `${contactDisplayName(k)} ne recevra plus d'emails groupés.` : `${contactDisplayName(k)} peut de nouveau recevoir des emails groupés.`);
+  render();
+}
+
+/* ---------------------------- FORMAT DES ADRESSES D'UNE ENTREPRISE ---------------------------- */
+function emailNamePart(s){ return normTxt(s).replace(/['’\s]+/g,'').replace(/[^a-z0-9-]/g,''); }
+const EMAIL_PATTERNS = {
+  'prenom.nom': (p,n)=>p+'.'+n,
+  'p.nom':      (p,n)=>p[0]+'.'+n,
+  'pnom':       (p,n)=>p[0]+n,
+  'prenomnom':  (p,n)=>p+n,
+  'nom.prenom': (p,n)=>n+'.'+p,
+  'prenom-nom': (p,n)=>p+'-'+n,
+  'prenom_nom': (p,n)=>p+'_'+n,
+  'nom.p':      (p,n)=>n+'.'+p[0],
+  'nomp':       (p,n)=>n+p[0],
+  'nom':        (p,n)=>n,
+  'prenom':     (p,n)=>p,
+};
+function companyEmailPattern(cid){
+  const co = byId(DB.companies, cid);
+  const contacts = companyContacts(cid).filter(k => isValidEmail(k.email) && !k.emailDeduit);
+  const domCount = {};
+  contacts.forEach(k => { const d = emailDomain(k.email); if(d && !WEBMAIL_DOMAINS.has(d)) domCount[d] = (domCount[d]||0)+1; });
+  const topDomain = Object.entries(domCount).sort((a,b)=>b[1]-a[1])[0];
+  const domain = topDomain ? topDomain[0] : siteDomain(co && co.site);
+  if(!domain) return null;
+  const counts = {};
+  contacts.forEach(k => {
+    if(emailDomain(k.email) !== domain) return;
+    const p = emailNamePart(k.prenom), n = emailNamePart(k.nom);
+    if(!p || !n) return;
+    const local = normalizeEmail(k.email).toLowerCase().split('@')[0];
+    for(const [key, fn] of Object.entries(EMAIL_PATTERNS)){
+      if(fn(p,n) === local){ counts[key] = (counts[key]||0)+1; break; }
+    }
+  });
+  const best = Object.entries(counts).sort((a,b)=>b[1]-a[1])[0];
+  return best
+    ? {domain, pattern: best[0], evidence: best[1], confirmed: true}
+    : {domain, pattern: 'prenom.nom', evidence: 0, confirmed: false};
+}
+function buildEmailFromPattern(pat, prenom, nom){
+  const p = emailNamePart(prenom), n = emailNamePart(nom);
+  if(!pat || !p || !n) return '';
+  return EMAIL_PATTERNS[pat.pattern](p, n) + '@' + pat.domain;
+}
+function deduceContactEmail(cid){
+  const pat = companyEmailPattern(cid);
+  if(!pat){ toast("Aucun domaine connu pour cette entreprise : renseignez son site internet ou une adresse existante.", 4000); return; }
+  const e = buildEmailFromPattern(pat, contactForm.prenom, contactForm.nom);
+  if(!e){ toast("Saisissez d'abord le prénom et le nom du contact."); return; }
+  contactForm.email = e;
+  contactForm.emailDeduit = true;
+  render();
+  toast(pat.confirmed
+    ? `Adresse proposée au format ${pat.pattern}@${pat.domain}, constaté sur ${pat.evidence} adresse(s). À confirmer.`
+    : `Adresse proposée au format le plus courant (prenom.nom), non vérifié pour ${pat.domain}.`, 4500);
+}
+
+/* ---------------------------- « TROUVER DES CONTACTS » (fiche entreprise) ---------------------------- */
+let findContactsFor = null;
+function toggleFindContacts(cid){
+  findContactsFor = findContactsFor === cid ? null : cid;
+  render();
+}
+function renderFindContactsPanel(co){
+  if(findContactsFor !== co.id) return '';
+  const contacts = companyContacts(co.id);
+  const pat = companyEmailPattern(co.id);
+  const q = encodeURIComponent;
+  const siteUrl = co.site ? (/^https?:/i.test(co.site) ? co.site : 'https://' + co.site.trim()) : '';
+  const place = co.ville ? ' ' + co.ville : '';
+  const links = [];
+  if(siteUrl) links.push(['Site internet', siteUrl]);
+  links.push(['Adresses publiées (Google)', 'https://www.google.com/search?q=' + q((pat ? 'site:' + pat.domain + ' ' : '"' + co.nom + '"' + place + ' ') + 'contact email')]);
+  links.push(['Dirigeants (Pappers)', 'https://www.pappers.fr/recherche?q=' + q(co.nom)]);
+  const linkedin = [
+    ['Acheteur', 'acheteur'], ['Maintenance', 'responsable maintenance'], ['Production', 'responsable production'],
+    ['Logistique', 'responsable logistique'], ['Qualité / HSE', 'responsable qualité'],
+  ].map(([label, kw]) => [label, 'https://www.linkedin.com/search/results/people/?keywords=' + q(kw + ' ' + co.nom)]);
+
+  const cover = TARGET_SERVICES.map(s => {
+    const n = contacts.filter(k => contactService(k)===s && isValidEmail(k.email) && !k.optOut).length;
+    return `<span class="svc-cover ${n?'ok':''}">${esc(CONTACT_SERVICES[s])}${n?` (${n})`:''}</span>`;
+  }).join('');
+
+  const patLine = !pat
+    ? `Aucun domaine connu : renseignez le site internet de l'entreprise pour pouvoir proposer les adresses de nouveaux contacts.`
+    : pat.confirmed
+      ? `Format des adresses : <strong>${esc(pat.pattern)}@${esc(pat.domain)}</strong>, constaté sur ${pat.evidence} adresse(s). Le bouton « Déduire l'email » du formulaire l'applique au nouveau contact.`
+      : `Domaine : <strong>${esc(pat.domain)}</strong>. Format pas encore confirmé : prenom.nom est le plus courant, à vérifier avant un envoi.`;
+
+  const btn = ([label, url]) => `<button class="btn small" data-url="${esc(url)}" onclick="openExternal(this.dataset.url)">${esc(label)}</button>`;
+  return `
+  <div class="find-panel">
+    <div class="find-row"><span class="find-label">Services couverts avec un email</span><div class="find-chips">${cover}</div></div>
+    <div class="find-row"><span class="find-label">Rechercher</span><div class="find-chips">${links.map(btn).join('')}</div></div>
+    <div class="find-row"><span class="find-label">LinkedIn</span><div class="find-chips">${linkedin.map(btn).join('')}</div></div>
+    <div class="find-hint">${patLine}</div>
+    <div class="find-actions">
+      <button class="btn small" onclick="toggleFindContacts('${co.id}')">Fermer</button>
+      <button class="btn small primary" onclick="toggleAddContact('${co.id}')">+ Ajouter le contact trouvé</button>
+    </div>
+  </div>`;
+}
+
+/* ---------------------------- IMPORT DE CONTACTS (CSV / EXCEL) ----------------------------
+   Accepte les exports des outils d'enrichissement (Dropcontact, Kaspr, Lusha…), les fichiers de
+   salon et les listes de prospection. Les colonnes sont reconnues par leur nom, quelle que soit
+   leur position ; la ligne d'en-tête est recherchée dans les 15 premières lignes. */
+const SHEETJS_CDNS = [
+  'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+  'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js',
+];
+let sheetLibLoaded = false;
+async function loadSheetLibrary(){
+  if(sheetLibLoaded || typeof XLSX !== 'undefined'){ sheetLibLoaded = true; return true; }
+  for(const url of SHEETJS_CDNS){
+    try{
+      await loadScriptOnce(url);
+      if(typeof XLSX !== 'undefined'){ sheetLibLoaded = true; return true; }
+    }catch(e){ console.warn('Serveur de lecture Excel indisponible, tentative suivante…', e); }
+  }
+  return false;
+}
+const IMPORT_COLS = {
+  prenom:   ['prenom','firstname','givenname','first'],
+  nom:      ['nom','lastname','surname','nomdefamille','familyname','last'],
+  fullname: ['nomcomplet','fullname','name','contact','interlocuteur','nomprenom','prenomnom','identite','contactidentifie','personne'],
+  email:    ['email','mail','emailpro','emailprofessionnel','emailprofessionnelle','adressemail','adresseemail','courriel','workemail','directemail','email1','e-mail'],
+  fonction: ['fonction','poste','jobtitle','job','title','titre','position','intituledeposte','metier'],
+  societe:  ['societe','entreprise','company','organisation','organization','raisonsociale','companyname','employeur','structure','nomentreprise','nomdelentreprise','etablissement','denomination','designation','client'],
+  tel:      ['telephone','tel','phone','fixe','telephonefixe','standard','telephone1','phonenumber','companyphone','lignedirecte'],
+  mobile:   ['mobile','portable','cell','telephoneportable','mobilephone','gsm','telportable'],
+  site:     ['site','siteweb','siteinternet','website','url','domaine','domain','websiteurl','companywebsite','companydomain'],
+  ville:    ['ville','city','commune','localite'],
+  cp:       ['codepostal','cp','zipcode','postalcode','zip'],
+};
+const IMPORT_COLS_NORM = Object.fromEntries(Object.entries(IMPORT_COLS).map(([k,v]) => [k, v.map(x=>normTxt(x).replace(/[^a-z0-9]/g,''))]));
+function normHeader(h){ return normTxt(h).replace(/[^a-z0-9]/g,''); }
+function mapImportHeaders(row){
+  const map = {};
+  row.forEach((h,i) => {
+    const n = normHeader(h);
+    if(!n) return;
+    for(const [field, aliases] of Object.entries(IMPORT_COLS_NORM)){
+      if(map[field] === undefined && aliases.includes(n)){ map[field] = i; return; }
+    }
+  });
+  row.forEach((h,i) => {
+    const n = normHeader(h);
+    if(map.email === undefined && /mail/.test(n) && !/qualif|statut|status|valid|score|optin|optout/.test(n)) map.email = i;
+    if(map.societe === undefined && /entreprise|societe|company|raisonsociale/.test(n)) map.societe = i;
+  });
+  // Fichiers où le nom de la société est dans une colonne « D » (exports de listes de prospection)
+  if(map.societe === undefined){ const i = row.findIndex(h => normHeader(h)==='d'); if(i>=0) map.societe = i; }
+  return map;
+}
+function findHeaderRow(rows){
+  let best = {idx:-1, map:{}, score:0};
+  rows.slice(0, 15).forEach((row, idx) => {
+    const map = mapImportHeaders(row);
+    const score = Object.keys(map).length + (map.email!==undefined ? 2 : 0);
+    if(score > best.score) best = {idx, map, score};
+  });
+  return best.score >= 3 ? best : null;
+}
+function titleCaseIfUpper(s){
+  s = (s||'').trim();
+  if(s && s === s.toUpperCase() && /[A-ZÀ-Ý]/.test(s)){
+    return s.toLowerCase().replace(/(^|[\s'-])([a-zà-ÿ])/g, (m,a,b) => a + b.toUpperCase());
+  }
+  return s;
+}
+function rowsToImportRecords(rows){
+  const header = findHeaderRow(rows);
+  if(!header) return [];
+  const m = header.map;
+  const cell = (row, f) => m[f]===undefined ? '' : String(row[m[f]] ?? '').replace(/\s+$/,'').replace(/^\s+/,'');
+  const out = [];
+  rows.slice(header.idx + 1).forEach(row => {
+    if(!row || !row.some(v => String(v??'').trim())) return;
+    let prenom = cell(row,'prenom'), nom = cell(row,'nom');
+    if(!prenom && !nom){
+      const full = cell(row,'fullname').split(/\r?\n/)[0].trim();
+      if(full && !/^\(/.test(full) && !/@/.test(full)){
+        const parts = full.split(/\s+/);
+        prenom = parts.shift() || '';
+        nom = parts.join(' ');
+      }
+    }
+    const emailMatch = cell(row,'email').match(/[^\s@;,<>()]+@[^\s@;,<>()]+\.[a-z]{2,}/i);
+    out.push({
+      prenom: titleCaseIfUpper(prenom), nom: nom.trim(),
+      email: emailMatch ? normalizeEmail(emailMatch[0]).toLowerCase() : '',
+      fonction: cell(row,'fonction').split(/\r?\n/)[0],
+      societe: cell(row,'societe'),
+      tel: cell(row,'tel').split(/\r?\n/)[0],
+      mobile: cell(row,'mobile').split(/\r?\n/)[0],
+      site: cell(row,'site'), ville: cell(row,'ville'), cp: cell(row,'cp'),
+    });
+  });
+  return out;
+}
+function parseCSVText(text){
+  text = text.replace(/^\uFEFF/, '');
+  const firstLine = text.split(/\r?\n/)[0] || '';
+  const delim = [';', ',', '\t'].map(d => [d, firstLine.split(d).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const rows = [];
+  let row = [], field = '', inQ = false;
+  for(let i=0; i<text.length; i++){
+    const ch = text[i];
+    if(inQ){
+      if(ch === '"'){ if(text[i+1] === '"'){ field += '"'; i++; } else inQ = false; }
+      else field += ch;
+    } else if(ch === '"') inQ = true;
+    else if(ch === delim){ row.push(field); field = ''; }
+    else if(ch === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+    else if(ch !== '\r') field += ch;
+  }
+  if(field || row.length){ row.push(field); rows.push(row); }
+  return rows;
+}
+function decodeTextBuffer(buf){
+  try{ return new TextDecoder('utf-8', {fatal:true}).decode(buf); }
+  catch(e){ return new TextDecoder('windows-1252').decode(buf); } // CSV enregistré depuis Excel
+}
+function fillMissingContactFields(k, r){
+  let changed = false;
+  ['prenom','nom','fonction','tel','mobile'].forEach(f => {
+    if(!(k[f]||'').trim() && (r[f]||'').trim()){ k[f] = r[f].trim(); changed = true; }
+  });
+  return changed;
+}
+function importContactRecords(records){
+  const rep = {added:0, completed:0, newCompanies:0, skipped:0, duplicates:0};
+  const byEmail = new Map();
+  DB.contacts.forEach(k => { if(isValidEmail(k.email)) byEmail.set(normalizeEmail(k.email).toLowerCase(), k); });
+  const companyByKey = new Map(DB.companies.map(co => [normKeyLoose(co.nom), co]));
+  const companyByDomain = new Map();
+  DB.companies.forEach(co => { const d = siteDomain(co.site); if(d && !companyByDomain.has(d)) companyByDomain.set(d, co); });
+  DB.contacts.forEach(k => {
+    const d = emailDomain(k.email);
+    if(d && !WEBMAIL_DOMAINS.has(d) && !companyByDomain.has(d)){
+      const co = DB.companies.find(c => c.id === k.companyId);
+      if(co) companyByDomain.set(d, co);
+    }
+  });
+  const contactsByCompany = new Map();
+  DB.contacts.forEach(k => { if(!contactsByCompany.has(k.companyId)) contactsByCompany.set(k.companyId, []); contactsByCompany.get(k.companyId).push(k); });
+  const seen = new Set();
+
+  records.forEach(r => {
+    const email = r.email;
+    const personKey = normKeyLoose((r.prenom||'') + (r.nom||''));
+    if(!email && !personKey){ rep.skipped++; return; }
+    const dedupKey = email || (normKeyLoose(r.societe) + '|' + personKey);
+    if(seen.has(dedupKey)){ rep.duplicates++; return; }
+    seen.add(dedupKey);
+
+    const existing = email ? byEmail.get(email) : null;
+    if(existing){
+      if(fillMissingContactFields(existing, r)) rep.completed++; else rep.duplicates++;
+      return;
+    }
+    let co = r.societe ? companyByKey.get(normKeyLoose(r.societe)) : null;
+    const dom = emailDomain(email);
+    if(!co && dom && !WEBMAIL_DOMAINS.has(dom)) co = companyByDomain.get(dom);
+    if(!co){ const sd = siteDomain(r.site); if(sd) co = companyByDomain.get(sd); }
+    if(!co && r.societe) co = findBestCompanyMatch(r.societe);
+    if(!co){
+      if(!r.societe){ rep.skipped++; return; }
+      co = {
+        id: gen_id_client('impco'), ref: 'CT-' + (DB.companies.length+1),
+        nom: r.societe.trim(), activite: '', secteur: 'Industrie',
+        rue:'', codePostal: r.cp||'', ville: r.ville||'', adresse:'', region: null,
+        tel:'', site: r.site||'', partenaire:'SENGO Expert direct', prestataire:'SENGO EXPERT',
+        potentiel:'moyen', statutClient:'prospect', groupe:'',
+        effectif:null, ca:null, lat:null, lon:null,
+        resume:'Importée depuis un fichier de contacts.', watch:[], strategie:'',
+      };
+      DB.companies.push(co);
+      companyByKey.set(normKeyLoose(co.nom), co);
+      if(dom && !WEBMAIL_DOMAINS.has(dom)) companyByDomain.set(dom, co);
+      rep.newCompanies++;
+    }
+    if(!co.site && r.site) co.site = r.site;
+    const list = contactsByCompany.get(co.id) || [];
+    const same = personKey ? list.find(k => normKeyLoose((k.prenom||'')+(k.nom||'')) === personKey) : null;
+    if(same){
+      let changed = fillMissingContactFields(same, r);
+      if(email && (!isValidEmail(same.email) || same.emailDeduit)){ same.email = email; same.emailDeduit = false; changed = true; byEmail.set(email, same); }
+      if(changed) rep.completed++; else rep.duplicates++;
+      return;
+    }
+    const k = {
+      id: gen_id_client('impk'), companyId: co.id,
+      prenom: r.prenom||'', nom: r.nom||'', fonction: r.fonction||'',
+      tel: r.tel||'', mobile: r.mobile||'', email, role:'autre', notes:'',
+    };
+    DB.contacts.push(k);
+    list.push(k); contactsByCompany.set(co.id, list);
+    if(email) byEmail.set(email, k);
+    rep.added++;
+  });
+  return rep;
+}
+function triggerImportContactFile(){
+  const input = document.getElementById('import-contactfile-input');
+  if(input) input.click();
+}
+async function importContactFile(input){
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+  try{
+    const buf = await file.arrayBuffer();
+    let records = [];
+    if(/\.(xlsx|xls|xlsm)$/i.test(file.name)){
+      toast('Lecture du fichier Excel…', 2500);
+      const ok = await loadSheetLibrary();
+      if(!ok){ toast("Lecteur Excel indisponible (réseau). Enregistrez le fichier au format CSV depuis Excel puis réessayez.", 5000); return; }
+      const wb = XLSX.read(buf, {type:'array'});
+      wb.SheetNames.forEach(name => {
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, defval:'', raw:false});
+        records = records.concat(rowsToImportRecords(rows));
+      });
+    } else {
+      records = rowsToImportRecords(parseCSVText(decodeTextBuffer(buf)));
+    }
+    if(!records.length){
+      toast("Aucune colonne reconnue (prénom, nom, email, société…). Vérifiez que le fichier a une ligne d'en-têtes.", 5000);
+      return;
+    }
+    const rep = importContactRecords(records);
+    render();
+    toast(`${rep.added} contact(s) ajouté(s), ${rep.completed} complété(s), ${rep.newCompanies} nouvelle(s) entreprise(s), ${rep.duplicates} déjà connu(s), ${rep.skipped} ligne(s) ignorée(s).`, 6500);
+    setTimeout(saveNow, 1800);
+  }catch(err){
+    console.error('Import de contacts échoué', err);
+    toast('Fichier illisible : utilisez un fichier CSV ou Excel (.xlsx).', 4000);
+  }
+}
+
+/* ---------------------------- CAMPAGNE EMAIL ---------------------------- */
+let mailingListOpen = false; // nom conservé : lu par render()
+let camp = null;
+const MAIL_SCOPES = ['Mail.Send', 'Mail.ReadWrite']; // envoi + création de brouillons
+const MAIL_SEND_INTERVAL_MS = 2300; // ≈ 26 envois/minute : sous la limite Outlook de 30 messages/minute
+const MAILING_DRAFT_KEY = 'sengo_os_mailing_draft';
+const DEFAULT_MAIL_BODY = '{bonjour},\n\n\n\nBien cordialement,';
+const UNSUB_TEXT = "Si vous préférez ne plus recevoir ce type de message de ma part, il vous suffit de répondre « STOP ».";
+
+function loadMailingDraft(){
+  try{ return JSON.parse(localStorage.getItem(MAILING_DRAFT_KEY) || '{}') || {}; }catch(e){ return {}; }
+}
+let __mailDraftT = null;
+function saveMailingDraftSoon(){
+  clearTimeout(__mailDraftT);
+  __mailDraftT = setTimeout(() => {
+    if(!camp) return;
+    try{ localStorage.setItem(MAILING_DRAFT_KEY, JSON.stringify({subject:camp.subject, body:camp.body, signature:camp.signature, unsub:camp.unsub})); }catch(e){}
+  }, 500);
+}
+function daysSince(dateStr){
+  if(!dateStr) return Infinity;
+  return Math.round((new Date(todayStr) - new Date(dateStr)) / 86400000);
+}
+function recentlyMailed(k){ return daysSince(k.dernierMailing) < 30; }
+function campRunning(){ return !!(camp && camp.progress && camp.progress.running); }
+
+function openMailingForCompanies(companyIds, label){
+  const ids = new Set(companyIds);
+  if(!ids.size){ toast('Aucune entreprise dans cette sélection.'); return; }
+  const contacts = DB.contacts.filter(k => ids.has(k.companyId));
+  const withEmail = new Set(contacts.filter(k => isValidEmail(k.email)).map(k => k.companyId));
+  openCampaign(contacts.map(k => k.id), label, {coTotal: ids.size, coNoEmail: [...ids].filter(id => !withEmail.has(id)).length});
+}
+function openMailingForFiltered(){ // bouton de la carte
+  openMailingForCompanies(filteredMapCompaniesAll().map(c => c.id), 'Carte, résultats filtrés');
+}
+function openMailingForEntreprises(){
+  openMailingForCompanies(filteredSortedCompanies().map(c => c.id), 'Entreprises filtrées');
+}
+function openMailingForContacts(){
+  openCampaign(filteredSortedContacts().map(k => k.id), 'Contacts filtrés', {});
+}
+function openCampaign(contactIds, label, info){
+  const seen = new Set(), ids = [];
+  let noEmail = 0;
+  contactIds.forEach(id => {
+    const k = byId(DB.contacts, id);
+    if(!k) return;
+    const e = normalizeEmail(k.email||'').toLowerCase();
+    if(!isValidEmail(e)){ noEmail++; return; }
+    if(seen.has(e)) return;
+    seen.add(e); ids.push(k.id);
+  });
+  if(!ids.length){ toast('Aucun contact avec une adresse email valide dans cette sélection.', 3500); return; }
+  const draft = loadMailingDraft();
+  const selected = new Set(ids.filter(id => { const k = byId(DB.contacts, id); return !k.optOut && !k.emailDeduit && !recentlyMailed(k); }));
+  camp = {
+    step:1, label, ids, selected, svc:new Set(), hideRecent:false,
+    noEmail, coTotal: info.coTotal ?? null, coNoEmail: info.coNoEmail ?? null,
+    subject: draft.subject || '', body: draft.body || DEFAULT_MAIL_BODY, signature: draft.signature || '',
+    unsub: draft.unsub !== false, lastField:'body',
+    mode:'send', followDays:7, previewId:null, confirming:false,
+    progress:null, auth:'unknown', authError:'',
+  };
   mailingListOpen = true;
   render();
 }
 function closeMailingList(){
+  if(campRunning()){ toast("Envoi en cours : cliquez d'abord sur « Arrêter l'envoi »."); return; }
   mailingListOpen = false;
+  camp = null;
   render();
 }
+function campSvcMatch(k){ return camp.svc.size === 0 || camp.svc.has(contactService(k)); }
+function campVisibleContacts(){
+  return camp.ids.map(id => byId(DB.contacts, id)).filter(k => k && campSvcMatch(k) && (!camp.hideRecent || !recentlyMailed(k)));
+}
+function campRecipients(){
+  return campVisibleContacts().filter(k => camp.selected.has(k.id) && !k.optOut && isValidEmail(k.email));
+}
+function toggleCampService(s){
+  if(camp.svc.has(s)) camp.svc.delete(s); else camp.svc.add(s);
+  render();
+}
+function toggleCampContact(kid){
+  if(camp.selected.has(kid)) camp.selected.delete(kid); else camp.selected.add(kid);
+  render();
+}
+function setCampAll(on){
+  campVisibleContacts().forEach(k => { if(on && !k.optOut) camp.selected.add(k.id); else if(!on) camp.selected.delete(k.id); });
+  render();
+}
+function setCampStep(n){
+  if(campRunning()) return;
+  if(n >= 2 && !campRecipients().length){ toast('Cochez au moins un destinataire.'); return; }
+  if(n === 3 && (!camp.subject.trim() || !camp.body.trim())){ toast("Renseignez l'objet et le message."); camp.step = 2; render(); return; }
+  camp.step = n;
+  camp.confirming = false;
+  render();
+  if(n === 3 && camp.auth !== 'ok') checkMailAuth();
+}
 function copyMailingEmails(){
-  const text = mailingEmails.join('; ');
-  navigator.clipboard.writeText(text).then(() => toast('Adresses copiées dans le presse-papiers.'));
+  const text = campRecipients().map(k => normalizeEmail(k.email)).join('; ');
+  navigator.clipboard.writeText(text).then(() => toast('Adresses copiées : collez-les en Cci dans votre messagerie.'));
 }
 function openMailingInMailClient(){
-  if(mailingEmails.length > 50){
-    toast(`Trop d'adresses (${mailingEmails.length}) pour ouvrir directement votre messagerie — utilisez plutôt "Copier les adresses" et collez-les en Cci dans votre outil habituel.`, 4500);
-    return;
-  }
-  openExternal('mailto:?bcc=' + encodeURIComponent(mailingEmails.map(normalizeEmail).join(',')));
+  const list = campRecipients();
+  if(list.length > 50){ toast(`Trop d'adresses (${list.length}) pour ouvrir directement votre messagerie : utilisez « Copier les adresses » ou l'envoi depuis SENGO OS.`, 4500); return; }
+  openExternal('mailto:?bcc=' + encodeURIComponent(list.map(k => normalizeEmail(k.email)).join(',')));
 }
+
+/* Personnalisation : {bonjour} donne « Bonjour Philippe » ou « Bonjour » si le prénom est inconnu. */
+function personalizeMail(tpl, k){
+  const co = byId(DB.companies, k.companyId);
+  const prenom = (k.prenom||'').trim();
+  const vars = {prenom, nom:(k.nom||'').trim(), entreprise: co ? co.nom : '', fonction:(k.fonction||'').trim(), bonjour: prenom ? 'Bonjour ' + prenom : 'Bonjour'};
+  return (tpl||'')
+    .replace(/\{\s*(prénom|prenom|nom|entreprise|fonction|bonjour)\s*\}/gi, (m, v) => vars[normTxt(v)] ?? '')
+    .replace(/[ \t]+,/g, ',')
+    .replace(/[ \t]{2,}/g, ' ');
+}
+function buildMailParts(k){
+  const subject = personalizeMail(camp.subject, k).trim();
+  let text = personalizeMail(camp.body, k).trim();
+  if(camp.signature.trim()) text += '\n\n' + camp.signature.trim();
+  const htmlText = s => esc(s).replace(/\n/g, '<br>');
+  const html = `<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f1f1f;line-height:1.45;">${htmlText(text)}`
+    + (camp.unsub ? `<p style="font-size:8.5pt;color:#8a8a8a;margin-top:18px;">${htmlText(UNSUB_TEXT)}</p>` : '')
+    + `</div>`;
+  return {subject, text: text + (camp.unsub ? '\n\n' + UNSUB_TEXT : ''), html};
+}
+function insertCampVar(v){
+  const field = camp.lastField === 'subject' ? 'subject' : 'body';
+  const el = document.getElementById(field === 'subject' ? 'camp-subject' : 'camp-body');
+  const token = '{' + v + '}';
+  if(el){
+    const s = el.selectionStart ?? el.value.length, e = el.selectionEnd ?? el.value.length;
+    el.value = el.value.slice(0, s) + token + el.value.slice(e);
+    el.selectionStart = el.selectionEnd = s + token.length;
+    el.focus();
+    camp[field] = el.value;
+  } else camp[field] += token;
+  saveMailingDraftSoon();
+  updateCampPreviewOnly();
+}
+function onCampInput(field, value){
+  camp[field] = value;
+  saveMailingDraftSoon();
+  updateCampPreviewOnly();
+}
+function renderCampPreview(){
+  const list = campRecipients();
+  if(!list.length) return '';
+  const k = list.find(x => x.id === camp.previewId) || list[0];
+  const p = buildMailParts(k);
+  return `
+    <div class="camp-prev-meta"><strong>À :</strong> ${esc(contactDisplayName(k))} &lt;${esc(normalizeEmail(k.email))}&gt;</div>
+    <div class="camp-prev-meta"><strong>Objet :</strong> ${esc(p.subject) || '<em>(objet vide)</em>'}</div>
+    <div class="camp-prev-body">${p.html}</div>`;
+}
+function updateCampPreviewOnly(){
+  const el = document.getElementById('camp-preview');
+  if(el) el.innerHTML = renderCampPreview();
+}
+
+/* ---------- Autorisation d'envoi (Microsoft Graph) ---------- */
+function mailAccount(){ return (typeof msalInstance !== 'undefined' && msalInstance) ? msalInstance.getActiveAccount() : null; }
+async function getMailTokenSilent(){
+  const account = mailAccount();
+  if(!account) throw new Error('Non connecté.');
+  const resp = await withTimeout(msalInstance.acquireTokenSilent({scopes: MAIL_SCOPES, account}), 10000, 'Délai dépassé.');
+  return resp.accessToken;
+}
+async function checkMailAuth(){
+  if(!camp) return;
+  if(!mailAccount()){ camp.auth = 'noaccount'; render(); return; }
+  camp.auth = 'checking';
+  render();
+  try{ await getMailTokenSilent(); if(camp) camp.auth = 'ok'; }
+  catch(e){ if(camp) camp.auth = 'needed'; }
+  if(camp) render();
+}
+function describeMailAuthError(e){
+  const msg = String((e && (e.errorMessage || e.message)) || e || '');
+  const code = (e && e.errorCode) || '';
+  if(/AADSTS65001|AADSTS90094|AADSTS90095|admin/i.test(msg)) return "Votre compte Microsoft 365 exige l'accord d'un administrateur pour autoriser l'envoi d'emails par une application. Demandez-lui de valider SENGO OS, ou utilisez « Copier les adresses » en attendant.";
+  if(code === 'user_cancelled' || /cancel/i.test(msg)) return "Autorisation annulée.";
+  if(code === 'popup_window_error' || /popup/i.test(msg)) return "La fenêtre Microsoft a été bloquée : autorisez les fenêtres pour ce site dans Safari, puis réessayez.";
+  return "Autorisation impossible : " + msg.slice(0, 180);
+}
+// Appelée directement par le clic : aucune attente avant l'ouverture de la fenêtre, sinon Safari la bloque.
+function authorizeMailSending(){
+  const account = mailAccount();
+  if(!account){ toast("Connectez-vous d'abord à votre compte Microsoft (icône ☁️)."); return; }
+  camp.authError = '';
+  msalInstance.acquireTokenPopup({scopes: MAIL_SCOPES, account, loginHint: account.username, prompt:'select_account'})
+    .then(resp => {
+      if(!camp) return;
+      if(resp.account && resp.account.username && resp.account.username.toLowerCase() !== account.username.toLowerCase()){
+        camp.auth = 'needed';
+        camp.authError = `Vous avez choisi le compte ${resp.account.username}, différent du compte connecté à SENGO OS (${account.username}). Choisissez le même compte.`;
+      } else {
+        camp.auth = 'ok';
+      }
+      render();
+    })
+    .catch(e => { if(!camp) return; camp.auth = 'needed'; camp.authError = describeMailAuthError(e); render(); });
+}
+
+/* ---------- Envoi ---------- */
+function campSleep(ms){
+  return new Promise(res => {
+    const t0 = Date.now();
+    const tick = () => { if(!camp || camp.progress.cancelled || Date.now() - t0 >= ms) res(); else setTimeout(tick, 200); };
+    tick();
+  });
+}
+async function graphMailRequest(path, payload, expectedStatus){
+  for(let attempt = 0; attempt < 4; attempt++){
+    const token = await getMailTokenSilent();
+    const r = await fetch('https://graph.microsoft.com/v1.0' + path, {
+      method:'POST',
+      headers:{Authorization:'Bearer ' + token, 'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    if(r.status === expectedStatus) return;
+    if(r.status === 429 || r.status === 503){
+      const wait = (parseInt(r.headers.get('Retry-After') || '20', 10) || 20) * 1000;
+      await campSleep(Math.min(wait, 120000));
+      continue;
+    }
+    let detail = '';
+    try{ const j = await r.json(); detail = (j && j.error && (j.error.code + ' : ' + j.error.message)) || ''; }catch(e){}
+    const err = new Error(detail || ('Erreur HTTP ' + r.status));
+    err.status = r.status;
+    err.fatal = r.status === 401 || r.status === 403 || /MailboxNotEnabled|ErrorAccessDenied/i.test(detail);
+    throw err;
+  }
+  throw new Error('Outlook limite temporairement les envois : réessayez plus tard.');
+}
+function sendOneMail(k){
+  const p = buildMailParts(k);
+  const message = {subject: p.subject, body:{contentType:'HTML', content:p.html}, toRecipients:[{emailAddress:{address: normalizeEmail(k.email), name: contactDisplayName(k)}}]};
+  if(camp.mode === 'draft') return graphMailRequest('/me/messages', message, 201).then(() => p);
+  return graphMailRequest('/me/sendMail', {message, saveToSentItems:true}, 202).then(() => p);
+}
+function friendlySendError(e){
+  const m = String(e && e.message || e);
+  if(/MailboxNotEnabled/i.test(m)) return "Ce compte Microsoft n'a pas de boîte Outlook utilisable pour l'envoi.";
+  if(/ErrorAccessDenied|403/.test(m)) return "Envoi refusé par Microsoft : autorisation manquante.";
+  if(/401|Non connecté|Délai/.test(m)) return "Session Microsoft expirée : cliquez sur « Autoriser l'envoi » puis relancez.";
+  if(/InvalidRecipients|recipient/i.test(m)) return "Adresse refusée par Outlook.";
+  return m.slice(0, 160);
+}
+async function startCampaign(){
+  if(campRunning()) return;
+  const recipients = campRecipients();
+  if(!recipients.length){ toast('Aucun destinataire sélectionné.'); return; }
+  if(!camp.confirming){ camp.confirming = true; render(); return; }
+  camp.confirming = false;
+  camp.progress = {running:true, cancelled:false, done:0, total:recipients.length, ok:0, errors:[], sent:[], finished:false, stoppedReason:''};
+  render();
+  for(let i = 0; i < recipients.length; i++){
+    if(!camp || camp.progress.cancelled) break;
+    const k = recipients[i];
+    try{
+      const p = await sendOneMail(k);
+      camp.progress.ok++;
+      camp.progress.sent.push({k, subject:p.subject, text:p.text});
+    }catch(e){
+      camp.progress.errors.push({name: contactDisplayName(k), email: normalizeEmail(k.email), msg: friendlySendError(e)});
+      if(e.fatal || /Non connecté|Délai/.test(String(e.message))){ camp.progress.stoppedReason = friendlySendError(e); break; }
+    }
+    camp.progress.done++;
+    updateCampProgressOnly();
+    if(i < recipients.length - 1) await campSleep(camp.mode === 'draft' ? 400 : MAIL_SEND_INTERVAL_MS);
+  }
+  if(!camp) return;
+  logCampaignResults();
+  camp.progress.running = false;
+  camp.progress.finished = true;
+  render();
+  setTimeout(saveNow, 1500);
+}
+function stopCampaign(){
+  if(camp && camp.progress){ camp.progress.cancelled = true; camp.progress.stoppedReason = 'Envoi arrêté à votre demande.'; updateCampProgressOnly(); }
+}
+// Une note « Email » par entreprise (tous ses destinataires regroupés) + une relance par entreprise.
+function logCampaignResults(){
+  const sent = camp.progress.sent;
+  if(!sent.length) return;
+  const byCompany = new Map();
+  sent.forEach(s => {
+    if(!byCompany.has(s.k.companyId)) byCompany.set(s.k.companyId, []);
+    byCompany.get(s.k.companyId).push(s);
+    s.k.dernierMailing = todayStr;
+  });
+  const verb = camp.mode === 'draft' ? 'Brouillon Outlook préparé pour' : 'Email envoyé à';
+  let tasks = 0;
+  byCompany.forEach((items, companyId) => {
+    const names = items.map(s => contactDisplayName(s.k)).join(', ');
+    const first = items[0];
+    DB.notes.push({
+      id: gen_id_client('n'), companyId, contactId: first.k.id, opportunityId: null,
+      date: todayStr, type: 'email', photos: [],
+      texte: `${verb} ${names} — « ${first.subject} »\n\n${first.text}`,
+    });
+    if(camp.followDays > 0){
+      DB.tasks.push({
+        id: gen_id_client('t'), companyId, contactId: first.k.id, opportunityId: null,
+        titre: `Relancer ${names} suite à l'email « ${first.subject} »`,
+        echeance: addDays(camp.followDays), priorite: 'moyenne', statut: 'ouverte',
+      });
+      tasks++;
+    }
+  });
+  camp.progress.companiesLogged = byCompany.size;
+  camp.progress.tasksCreated = tasks;
+}
+function renderCampProgress(){
+  const p = camp.progress;
+  if(!p) return '';
+  const pct = p.total ? Math.round(p.done / p.total * 100) : 0;
+  const isDraft = camp.mode === 'draft';
+  const head = p.finished
+    ? `<div class="camp-done">${p.ok} ${isDraft ? 'brouillon(s) créé(s) dans Outlook' : 'email(s) envoyé(s)'} sur ${p.total}.${p.companiesLogged ? ` Inscrit(s) dans l'historique de ${p.companiesLogged} entreprise(s)` + (p.tasksCreated ? `, ${p.tasksCreated} relance(s) programmée(s) dans la file de travail.` : '.') : ''}</div>`
+    : `<div class="camp-running">${isDraft ? 'Création des brouillons' : 'Envoi'} : ${p.done} / ${p.total}. Gardez cette fenêtre ouverte.</div>`;
+  return `
+    ${head}
+    <div class="camp-bar"><div style="width:${pct}%"></div></div>
+    ${p.stoppedReason ? `<div class="camp-warn">${esc(p.stoppedReason)}</div>` : ''}
+    ${p.errors.length ? `<details class="camp-errors" ${p.finished?'open':''}><summary>${p.errors.length} échec(s)</summary>${p.errors.map(e=>`<div>${esc(e.name)} &lt;${esc(e.email)}&gt; : ${esc(e.msg)}</div>`).join('')}</details>` : ''}
+    ${p.running ? `<button class="btn small" onclick="stopCampaign()">Arrêter l'envoi</button>` : ''}`;
+}
+function updateCampProgressOnly(){
+  const el = document.getElementById('camp-progress');
+  if(el) el.innerHTML = renderCampProgress();
+}
+window.addEventListener('beforeunload', e => { if(campRunning()){ e.preventDefault(); e.returnValue = ''; } });
+
+/* ---------- Affichage de la fenêtre de campagne ---------- */
 function renderMailingModal(){
+  if(!camp) return '';
+  const running = campRunning();
+  const recipients = campRecipients();
+  const steps = [[1, `Destinataires (${recipients.length})`], [2, 'Message'], [3, 'Envoi']];
+  let body = '', foot = '';
+
+  if(camp.step === 1){
+    const all = camp.ids.map(id => byId(DB.contacts, id)).filter(Boolean);
+    const svcCounts = {};
+    all.forEach(k => { const s = contactService(k); svcCounts[s] = (svcCounts[s]||0) + 1; });
+    const visible = campVisibleContacts();
+    const recentCount = all.filter(recentlyMailed).length;
+    const infos = [];
+    if(camp.noEmail) infos.push(`${camp.noEmail} contact(s) de la sélection n'ont pas d'email.`);
+    if(camp.coNoEmail) infos.push(`${camp.coNoEmail} entreprise(s) sur ${camp.coTotal} n'ont aucun email : ouvrez leur fiche, bloc Contacts, « Trouver des contacts ».`);
+    body = `
+      ${infos.length ? `<div class="camp-info">${infos.map(esc).join('<br>')}</div>` : ''}
+      <div class="camp-svc-filter">
+        <span class="find-label">Services</span>
+        <button class="svc-toggle ${camp.svc.size===0?'active':''}" onclick="camp.svc.clear();render()">Tous (${all.length})</button>
+        ${SERVICE_ORDER.filter(s => svcCounts[s]).map(s => `<button class="svc-toggle ${camp.svc.has(s)?'active':''}" onclick="toggleCampService('${s}')">${esc(serviceLabel(s))} (${svcCounts[s]})</button>`).join('')}
+      </div>
+      <div class="camp-tools">
+        <label><input type="checkbox" ${camp.hideRecent?'checked':''} onchange="camp.hideRecent=this.checked;render()"> Masquer les contacts écrits depuis moins de 30 jours${recentCount?` (${recentCount})`:''}</label>
+        <span style="margin-left:auto;display:flex;gap:6px;">
+          <button class="btn small ghost" onclick="setCampAll(true)">Tout cocher</button>
+          <button class="btn small ghost" onclick="setCampAll(false)">Tout décocher</button>
+        </span>
+      </div>
+      <div class="camp-list" id="camp-list" data-preserve-scroll>
+        ${visible.map(k => {
+          const co = byId(DB.companies, k.companyId);
+          const s = contactService(k);
+          const badges = [
+            k.emailDeduit ? `<span class="camp-badge warn" title="Adresse déduite du format de l'entreprise, jamais confirmée">déduite</span>` : '',
+            recentlyMailed(k) ? `<span class="camp-badge">écrit il y a ${daysSince(k.dernierMailing)} j</span>` : '',
+            k.optOut ? `<span class="camp-badge off">ne plus contacter</span>` : '',
+          ].join('');
+          return `
+          <div class="camp-row ${k.optOut?'off':''}">
+            <input type="checkbox" ${camp.selected.has(k.id)&&!k.optOut?'checked':''} ${k.optOut?'disabled':''} onchange="toggleCampContact('${k.id}')" aria-label="Inclure ${esc(contactDisplayName(k))}">
+            <div class="camp-who">
+              <div class="camp-name">${esc(contactDisplayName(k))}</div>
+              <div class="camp-sub">${esc(co ? co.nom : '')}${k.fonction ? ', ' + esc(k.fonction) : ''}</div>
+            </div>
+            <div class="camp-mail">${esc(normalizeEmail(k.email))} ${badges}</div>
+            <select class="camp-svc" onchange="setContactService('${k.id}',this.value)" title="Service du contact">
+              ${SERVICE_ORDER.map(v => `<option value="${v}" ${s===v?'selected':''}>${esc(serviceLabel(v))}</option>`).join('')}
+            </select>
+            <button class="btn ghost small" title="${k.optOut?'Réautoriser les emails groupés':'Ne plus lui envoyer d’emails groupés'}" onclick="toggleContactOptOut('${k.id}')">${k.optOut?'Réactiver':'⛔'}</button>
+          </div>`;
+        }).join('') || `<div class="empty-queue">Aucun contact pour ces services.</div>`}
+      </div>`;
+    foot = `
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn small" onclick="copyMailingEmails()">📋 Copier les adresses</button>
+        <button class="btn small" onclick="openMailingInMailClient()">✉️ Ouvrir dans ma messagerie</button>
+      </div>
+      <button class="btn primary" onclick="setCampStep(2)" ${recipients.length?'':'disabled'}>Rédiger le message</button>`;
+  }
+
+  if(camp.step === 2){
+    const vars = [['bonjour','Bonjour + prénom'], ['prenom','Prénom'], ['nom','Nom'], ['entreprise','Entreprise'], ['fonction','Fonction']];
+    body = `
+      <div class="modal-field">
+        <label for="camp-subject">Objet</label>
+        <input id="camp-subject" class="camp-input" value="${esc(camp.subject)}" placeholder="Ex. : Réduire votre consommation de film étirable" onfocus="camp.lastField='subject'" oninput="onCampInput('subject', this.value)" data-focus-key="camp-subject">
+      </div>
+      <div class="camp-vars"><span class="find-label">Insérer</span>${vars.map(([v,l]) => `<button class="svc-toggle" onmousedown="event.preventDefault()" onclick="insertCampVar('${v}')">${esc(l)}</button>`).join('')}</div>
+      <div class="modal-field">
+        <label for="camp-body">Message</label>
+        <textarea id="camp-body" style="min-height:190px;" onfocus="camp.lastField='body'" oninput="onCampInput('body', this.value)" data-focus-key="camp-body">${esc(camp.body)}</textarea>
+      </div>
+      <div class="modal-field">
+        <label for="camp-signature">Signature <span style="font-weight:400;color:var(--ink-500);">(mémorisée sur cet appareil ; la signature Outlook n'est pas ajoutée automatiquement)</span></label>
+        <textarea id="camp-signature" style="min-height:70px;" placeholder="Nom, fonction, téléphone, site…" oninput="onCampInput('signature', this.value)" data-focus-key="camp-signature">${esc(camp.signature)}</textarea>
+      </div>
+      <label class="camp-check"><input type="checkbox" ${camp.unsub?'checked':''} onchange="camp.unsub=this.checked;saveMailingDraftSoon();updateCampPreviewOnly()"> Ajouter la mention de désinscription (réponse « STOP »), recommandée en prospection</label>
+      <div class="camp-preview-wrap">
+        <div class="camp-prev-head">
+          <span class="find-label">Aperçu pour</span>
+          <select onchange="camp.previewId=this.value;updateCampPreviewOnly()">
+            ${recipients.slice(0, 300).map(k => `<option value="${k.id}" ${camp.previewId===k.id?'selected':''}>${esc(contactDisplayName(k))}</option>`).join('')}
+          </select>
+        </div>
+        <div id="camp-preview">${renderCampPreview()}</div>
+      </div>`;
+    foot = `
+      <button class="btn" onclick="setCampStep(1)">Retour aux destinataires</button>
+      <button class="btn primary" onclick="setCampStep(3)">Préparer l'envoi</button>`;
+  }
+
+  if(camp.step === 3){
+    const account = mailAccount();
+    const n = recipients.length;
+    const minutes = Math.max(1, Math.ceil(n * MAIL_SEND_INTERVAL_MS / 60000));
+    let authBlock = '';
+    if(!camp.progress || !camp.progress.finished){
+      if(camp.auth === 'noaccount') authBlock = `<div class="camp-warn">Connectez-vous d'abord à votre compte Microsoft avec l'icône ☁️ : c'est ce compte qui enverra les emails depuis son Outlook.</div>`;
+      else if(camp.auth === 'checking' || camp.auth === 'unknown') authBlock = `<div class="camp-info">Vérification de l'autorisation d'envoi…</div>`;
+      else if(camp.auth === 'needed') authBlock = `
+        <div class="camp-info">SENGO OS a besoin de votre accord, une seule fois, pour envoyer des emails et créer des brouillons depuis votre Outlook. Une fenêtre Microsoft va s'ouvrir.</div>
+        ${camp.authError ? `<div class="camp-warn">${esc(camp.authError)}</div>` : ''}
+        <div><button class="btn primary" onclick="authorizeMailSending()">Autoriser l'envoi depuis Outlook</button></div>`;
+    }
+    body = `
+      ${account ? `<div class="camp-info">Envoi depuis <strong>${esc(account.username)}</strong> : un email individuel par destinataire, enregistré dans vos éléments envoyés.</div>` : ''}
+      ${(camp.progress && camp.progress.finished) ? '' : `<div class="camp-options ${running?'disabled':''}">
+        <label class="camp-check"><input type="radio" name="camp-mode" ${camp.mode==='send'?'checked':''} ${running?'disabled':''} onchange="camp.mode='send';render()"> Envoyer maintenant (${n} email${n>1?'s':''}, environ ${minutes} min)</label>
+        <label class="camp-check"><input type="radio" name="camp-mode" ${camp.mode==='draft'?'checked':''} ${running?'disabled':''} onchange="camp.mode='draft';render()"> Créer des brouillons dans Outlook, à relire et envoyer vous-même</label>
+        <div class="camp-follow">
+          <span>Relance dans la file de travail :</span>
+          <select ${running?'disabled':''} onchange="camp.followDays=parseInt(this.value,10)">
+            ${[[0,'Aucune'],[3,'Dans 3 jours'],[7,'Dans 1 semaine'],[15,'Dans 15 jours'],[30,'Dans 1 mois']].map(([v,l]) => `<option value="${v}" ${camp.followDays===v?'selected':''}>${l}</option>`).join('')}
+          </select>
+          <span class="hint">une tâche par entreprise</span>
+        </div>
+      </div>`}
+      ${n > 200 ? `<div class="camp-warn">Au-delà de 200 envois d'un coup, le risque d'être classé en courrier indésirable augmente : répartissez plutôt en plusieurs vagues sur quelques jours.</div>` : ''}
+      ${authBlock}
+      <div id="camp-progress">${renderCampProgress()}</div>`;
+    const finished = camp.progress && camp.progress.finished;
+    foot = finished
+      ? `<span class="hint">L'historique et les relances sont à jour.</span><button class="btn primary" onclick="closeMailingList()">Fermer</button>`
+      : `
+      <button class="btn" onclick="setCampStep(2)" ${running?'disabled':''}>Retour au message</button>
+      <button class="btn primary ${camp.confirming?'camp-confirm':''}" onclick="startCampaign()" ${(camp.auth!=='ok'||running)?'disabled':''}>
+        ${camp.confirming ? `Confirmer : ${camp.mode==='draft'?'créer':'envoyer'} ${n} email${n>1?'s':''}` : (camp.mode==='draft' ? `Créer ${n} brouillon${n>1?'s':''}` : `Envoyer ${n} email${n>1?'s':''}`)}
+      </button>`;
+  }
+
   return `
   <div class="modal-overlay" onclick="if(event.target===this) closeMailingList()">
-    <div class="modal" style="width:480px;">
-      <div class="modal-head" style="display:flex;justify-content:space-between;align-items:center;">
-        <h2 style="font-size:16px;font-weight:700;">Mailing — ${mailingEmails.length} adresse(s)</h2>
-        <button class="btn ghost small" onclick="closeMailingList()">✕</button>
+    <div class="modal camp-modal" role="dialog" aria-label="Campagne email">
+      <div class="modal-head camp-head">
+        <div><div class="mh-label">Campagne email</div><div class="mh-title">${esc(camp.label)}</div></div>
+        <button class="btn ghost small" onclick="closeMailingList()" ${running?'disabled':''} aria-label="Fermer">✕</button>
       </div>
-      <div style="padding:16px 20px;max-height:300px;overflow-y:auto;font-size:12.5px;color:var(--ink-700);line-height:1.7;">
-        ${mailingEmails.map(e=>esc(e)).join('<br>')}
+      <div class="camp-steps">
+        ${steps.map(([i,l]) => `<button class="${camp.step===i?'active':''}" onclick="setCampStep(${i})" ${running?'disabled':''}><span>${i}</span>${esc(l)}</button>`).join('')}
       </div>
-      <div class="inline-form-actions" style="padding:14px 20px;border-top:1px solid var(--line);">
-        <button class="btn" onclick="closeMailingList()">Fermer</button>
-        <button class="btn" onclick="copyMailingEmails()">📋 Copier les adresses</button>
-        <button class="btn primary" onclick="openMailingInMailClient()">✉️ Ouvrir dans ma messagerie</button>
-      </div>
+      <div class="modal-body camp-body">${body}</div>
+      <div class="modal-foot">${foot}</div>
     </div>
   </div>`;
 }
+
 
 /* ---------------------------- CALCUL D'ITINÉRAIRE ROUTIER RÉEL ----------------------------
    Utilise OSRM (service de calcul d'itinéraire routier gratuit, sans clé à configurer) pour
