@@ -353,7 +353,28 @@
        hauteur, la carte grandissait d'autant, repoussant tout le reste de la fiche (contacts,
        opportunités...) très bas dans la page. Une hauteur maximale avec défilement propre à cette
        zone garde le texte intégralement consultable, sans jamais rien couper ni tronquer. */
-    max-height:220px;overflow-y:auto;padding-right:4px;
+    max-height:220px;overflow-y:auto;padding-right:8px;
+  }
+  /* Sur Mac notamment, les barres de défilement restent invisibles par défaut tant qu'on ne fait
+     pas activement défiler (réglage système "Afficher les barres de défilement : en cas de
+     défilement") — laissant croire à tort qu'il n'y a rien de plus à lire. On la rend visible en
+     permanence, avec un style discret mais net, pour qu'elle serve de repère visuel constant. */
+  .resume-text::-webkit-scrollbar{width:7px;}
+  .resume-text::-webkit-scrollbar-track{background:var(--panel-2);border-radius:4px;}
+  .resume-text::-webkit-scrollbar-thumb{background:var(--brand-orange,#ED6D05);border-radius:4px;}
+  .resume-text{scrollbar-width:thin;scrollbar-color:var(--brand-orange,#ED6D05) var(--panel-2);}
+  /* Repère supplémentaire, indépendant du rendu de la barre elle-même (qui peut rester invisible
+     selon le réglage système) : un dégradé en bas de la zone, avec une mention explicite, posé
+     uniquement quand il reste réellement du texte caché sous la partie visible (voir la vérification
+     juste après chaque affichage). Il disparaît de lui-même une fois arrivé en bas. */
+  .resume-scroll-wrap{position:relative;}
+  .resume-scroll-wrap.has-more::after{
+    content:'▼ Faire défiler pour lire la suite';
+    position:absolute;left:0;right:8px;bottom:0;height:34px;
+    display:flex;align-items:flex-end;justify-content:center;padding-bottom:3px;
+    font-family:'IBM Plex Sans',sans-serif;font-style:normal;font-size:10.5px;font-weight:600;
+    color:var(--brand-orange,#ED6D05);letter-spacing:.02em;pointer-events:none;
+    background:linear-gradient(to bottom, transparent, var(--panel) 65%);
   }
   .resume-edit textarea{
     width:100%;min-height:90px;border:1px solid var(--line);border-radius:7px;padding:10px;
@@ -7345,7 +7366,9 @@ function renderResume(co){
   return `
   <div class="card">
     <h2>Résumé du compte <button class="btn ghost small" onclick="toggleResumeEdit()">✎ Modifier</button></h2>
-    <div class="resume-text serif">${esc(co.resume)}</div>
+    <div class="resume-scroll-wrap">
+      <div class="resume-text serif" id="resume-text-box">${esc(co.resume)}</div>
+    </div>
     ${co.watch && co.watch.length ? `<div class="resume-points">${co.watch.map(w=>`<span class="pill watch">⚠ ${esc(w)}</span>`).join('')}</div>` : ''}
   </div>`;
 }
@@ -9961,7 +9984,21 @@ function render(){
   }
 
   window.scrollTo(0, savedScrollY);
+  updateResumeScrollHint();
   scheduleAutoSave();
+}
+function updateResumeScrollHint(){
+  const box = document.getElementById('resume-text-box');
+  const wrap = box ? box.closest('.resume-scroll-wrap') : null;
+  if(!box || !wrap) return;
+  const refresh = () => {
+    // Un petit écart de tolérance : arrivé tout en bas, on ne veut plus jamais voir l'indice,
+    // même si un demi-pixel d'arrondi laisserait sinon un reliquat de dégradé visible.
+    const hasMore = (box.scrollHeight - box.scrollTop - box.clientHeight) > 4;
+    wrap.classList.toggle('has-more', hasMore);
+  };
+  refresh();
+  box.onscroll = refresh; // l'indice s'efface au fur et à mesure qu'on lit, et revient si on remonte
 }
 
 /* Sur mobile, quand le clavier s'ouvre, la fenêtre modale (position fixe) doit suivre
