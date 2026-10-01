@@ -892,7 +892,7 @@ function relLabel(dstr){
 }
 
 /* ---------------------------- DATA ---------------------------- */
-const APP_VERSION = '2026-09-30 · build f (filtre sans action)';
+const APP_VERSION = '2026-10-01 · build g (SIRET + TVA)';
 console.log('SENGO OS — version', APP_VERSION);
 let DB = {
   companies: [
@@ -6504,6 +6504,18 @@ function toggleAddrLookupExpand(i){
   updateAddrLookupResultsOnly(addrLookup.target);
 }
 
+function computeTvaFromSiret(siret){
+  // Formule officielle du numéro de TVA intracommunautaire français, à partir des 9 premiers
+  // chiffres du SIRET (le SIREN) : clé = (12 + 3 × (SIREN mod 97)) mod 97, puis FR + clé + SIREN.
+  // Aucun appel réseau nécessaire, le résultat est purement calculé.
+  if(!siret) return '';
+  const siren = siret.replace(/\D/g,'').slice(0,9);
+  if(siren.length !== 9) return '';
+  const sirenNum = parseInt(siren, 10);
+  if(isNaN(sirenNum)) return '';
+  const key = (12 + 3 * (sirenNum % 97)) % 97;
+  return 'FR' + String(key).padStart(2,'0') + siren;
+}
 function applyAddrSuggestion(target, ci, ei){
   console.log('[DIAGNOSTIC adresse] applyAddrSuggestion appelée — target:', target, '| ci:', ci, '| ei:', ei);
   const c = addrLookup.results[ci];
@@ -6518,6 +6530,7 @@ function applyAddrSuggestion(target, ci, ei){
     newCompanyForm.codePostal = e.cp;
     newCompanyForm.ville = e.ville;
     if(!newCompanyForm.activite && c.naf) newCompanyForm.activite = c.naf;
+    if(e.siret){ newCompanyForm.siret = e.siret; newCompanyForm.tva = computeTvaFromSiret(e.siret); }
   } else {
     const co = byId(DB.companies, target);
     console.log('[DIAGNOSTIC adresse] entreprise ciblée trouvée dans DB.companies:', co ? co.nom + ' (id: ' + co.id + ')' : 'INTROUVABLE — target ne correspond à aucune entreprise !');
@@ -6535,6 +6548,11 @@ function applyAddrSuggestion(target, ci, ei){
       stampField(co, 'rue'); stampField(co, 'codePostal'); stampField(co, 'ville');
       syncAdresseFromParts(co);
       if(!co.activite && c.naf){ co.activite = c.naf; stampField(co, 'activite'); }
+      if(e.siret){
+        co.siret = e.siret;
+        co.tva = computeTvaFromSiret(e.siret);
+        stampField(co, 'siret'); stampField(co, 'tva');
+      }
       console.log('[DIAGNOSTIC adresse] valeurs appliquées sur l\'objet — rue:', co.rue, '| codePostal:', co.codePostal, '| ville:', co.ville, '| adresse combinée:', co.adresse);
       console.log('[DIAGNOSTIC adresse] state.selectedCompanyId au moment de l\'application:', state.selectedCompanyId, '(doit correspondre à target ci-dessus)');
     }
@@ -6700,9 +6718,9 @@ function setPrestataireFilterAndClose(v){
   prestataireMenuOpen = false;
   render();
 }
-let newCompanyForm = {nom:'', secteur:'', activite:'', rue:'', codePostal:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctMobile:'', ctEmail:'', ctRole:'autre'};
+let newCompanyForm = {nom:'', secteur:'', activite:'', rue:'', codePostal:'', ville:'', region:'', tel:'', site:'', siret:'', tva:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctMobile:'', ctEmail:'', ctRole:'autre'};
 function resetNewCompanyForm(){
-  newCompanyForm = {nom:'', secteur:'', activite:'', rue:'', codePostal:'', ville:'', region:'', tel:'', site:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctMobile:'', ctEmail:'', ctRole:'autre'};
+  newCompanyForm = {nom:'', secteur:'', activite:'', rue:'', codePostal:'', ville:'', region:'', tel:'', site:'', siret:'', tva:'', prestataire:'SENGO EXPERT', potentiel:'moyen', ctPrenom:'', ctNom:'', ctFonction:'', ctTel:'', ctMobile:'', ctEmail:'', ctRole:'autre'};
 }
 function toggleAddCompany(){
   addingCompanyOpen = !addingCompanyOpen;
@@ -6740,6 +6758,10 @@ function renderInlineCompanyForm(){
       <div class="grid2">
         <input id="nco-tel" placeholder="Téléphone" value="${esc(newCompanyForm.tel)}" oninput="newCompanyForm.tel=this.value" data-focus-key="nco-tel">
         <input id="nco-site" placeholder="Site web" value="${esc(newCompanyForm.site)}" oninput="newCompanyForm.site=this.value" data-focus-key="nco-site">
+      </div>
+      <div class="grid2">
+        <input id="nco-siret" class="mono" placeholder="SIRET (rempli via la recherche d'adresse)" value="${esc(newCompanyForm.siret)}" oninput="newCompanyForm.siret=this.value" data-focus-key="nco-siret">
+        <input id="nco-tva" class="mono" placeholder="N° TVA (calculé automatiquement)" value="${esc(newCompanyForm.tva)}" oninput="newCompanyForm.tva=this.value" data-focus-key="nco-tva">
       </div>
       <div class="grid2">
         <select id="nco-prestataire" onchange="newCompanyForm.prestataire=this.value">
@@ -6798,6 +6820,7 @@ function submitNewCompany(){
     region: newCompanyForm.region || null,
     tel: newCompanyForm.tel.trim(),
     site: newCompanyForm.site.trim(),
+    siret: (newCompanyForm.siret||'').trim(), tva: (newCompanyForm.tva||'').trim(),
     partenaire: prestataire==='SENGO EXPERT' ? 'SENGO Expert direct' : prestataire,
     prestataire, potentiel: newCompanyForm.potentiel,
     effectif:null, ca:null, lat:null, lon:null,
@@ -7568,6 +7591,10 @@ function renderEntreprise(co){
     ${(!co.rue && !co.codePostal && co.adresse) ? `<div style="font-size:11px;color:var(--ink-500);margin:-6px 0 10px;">Ancienne saisie : ${esc(co.adresse)} — à répartir ci-dessus si besoin.</div>` : ''}
     <div class="field-row"><label>Téléphone</label><input class="mono" value="${esc(co.tel)}" onblur="updateCompanyField('${co.id}','tel',this.value)"></div>
     <div class="field-row"><label>Site web</label><input value="${esc(co.site)}" onblur="updateCompanyField('${co.id}','site',this.value)"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="field-row"><label>SIRET</label><input class="mono" placeholder="Rempli via la recherche d'adresse" value="${esc(co.siret||'')}" onblur="updateCompanyField('${co.id}','siret',this.value)"></div>
+      <div class="field-row"><label>N° TVA intracommunautaire</label><input class="mono" placeholder="Calculé automatiquement" value="${esc(co.tva||'')}" onblur="updateCompanyField('${co.id}','tva',this.value)"></div>
+    </div>
     <div class="field-row"><label>Prestataire</label>
       <select onchange="updatePrestataire('${co.id}', this.value)">
         ${PRESTATAIRES.map(p=>`<option value="${p}" ${co.prestataire===p?'selected':''}>${p}</option>`).join('')}
