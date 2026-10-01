@@ -892,7 +892,7 @@ function relLabel(dstr){
 }
 
 /* ---------------------------- DATA ---------------------------- */
-const APP_VERSION = '2026-09-30 · build e (recherche + action rapide)';
+const APP_VERSION = '2026-09-30 · build f (filtre sans action)';
 console.log('SENGO OS — version', APP_VERSION);
 let DB = {
   companies: [
@@ -5898,7 +5898,7 @@ let state = {
   noteSort: {field:'date', dir:'desc'},
   // Entreprises (liste triable/filtrable)
   entSort: {field:'nom', dir:'asc'},
-  entFilters: {secteur:'tous', region:'tous', departement:'tous', taille:'tous', potentiel:'tous', groupe:'tous', statutClient:'tous', q:''},
+  entFilters: {secteur:'tous', region:'tous', departement:'tous', taille:'tous', potentiel:'tous', groupe:'tous', statutClient:'tous', action:'tous', q:''},
   // Contacts (liste triable/filtrable)
   ctSort: {field:'nom', dir:'asc'},
   ctFilters: {role:'tous', service:'tous', q:''},
@@ -5908,6 +5908,10 @@ function setNav(n){
   if(n === 'entreprises') { state.entreprisesDetailCid = null; state.entVisibleCount = 200; } // revient à la liste, pas à un détail resté ouvert
   if(n === 'carte') state.mapView = {...DEFAULT_VIEW}; // repart toujours d'une vue normale, pas du zoom laissé la dernière fois
   render();
+}
+function quickAddTaskFromList(cid){
+  viewCompanyInline(cid);
+  toggleAddTask(cid);
 }
 function viewCompanyInline(cid){
   state.selectedCompanyId = cid;
@@ -8263,6 +8267,7 @@ function filteredSortedCompanies(){
     (f.potentiel==='tous' || c.potentiel===f.potentiel) &&
     (f.groupe==='tous' || (c.groupe||'').trim().toLowerCase()===f.groupe) &&
     (f.statutClient==='tous' || (c.statutClient||'prospect')===f.statutClient) &&
+    (f.action==='tous' || (f.action==='sans' ? companyTasks(c.id).length===0 : companyTasks(c.id).length>0)) &&
     (!f.q || c.nom.toLowerCase().includes(f.q.toLowerCase()))
   );
   const {field, dir} = state.entSort;
@@ -8281,7 +8286,7 @@ function filteredSortedCompanies(){
   return list;
 }
 function resetEntFilters(){
-  state.entFilters = {secteur:'tous', region:'tous', departement:'tous', taille:'tous', potentiel:'tous', groupe:'tous', statutClient:'tous', q:''};
+  state.entFilters = {secteur:'tous', region:'tous', departement:'tous', taille:'tous', potentiel:'tous', groupe:'tous', statutClient:'tous', action:'tous', q:''};
   render();
 }
 
@@ -8297,7 +8302,7 @@ function renderEntreprisesPage(){
   const deptOptions = Object.keys(deptCounts).sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
   const list = filteredSortedCompanies();
   const f = state.entFilters;
-  const isFiltered = f.secteur!=='tous'||f.region!=='tous'||f.departement!=='tous'||f.taille!=='tous'||f.potentiel!=='tous'||f.q;
+  const isFiltered = f.secteur!=='tous'||f.region!=='tous'||f.departement!=='tous'||f.taille!=='tous'||f.potentiel!=='tous'||f.action!=='tous'||f.q;
 
   const th = (label, field) => `<th onclick="setEntSort('${field}')">${label}${sortArrow(field)}</th>`;
 
@@ -8358,6 +8363,11 @@ function renderEntreprisesPage(){
         <option value="moyen" ${f.potentiel==='moyen'?'selected':''}>Potentiel moyen</option>
         <option value="faible" ${f.potentiel==='faible'?'selected':''}>Potentiel faible</option>
       </select>
+      <select onchange="state.entFilters.action=this.value;render()" title="Retrouver rapidement les entreprises qui n'ont pas encore de suivi en cours">
+        <option value="tous" ${f.action==='tous'?'selected':''}>Toutes (action ou non)</option>
+        <option value="sans" ${f.action==='sans'?'selected':''}>⚠ Sans action en cours</option>
+        <option value="avec" ${f.action==='avec'?'selected':''}>Avec action en cours</option>
+      </select>
       <select onchange="state.entFilters.statutClient=this.value;render()">
         <option value="tous" ${f.statutClient==='tous'?'selected':''}>Clients + Prospects</option>
         <option value="client" ${f.statutClient==='client'?'selected':''}>Clients uniquement</option>
@@ -8414,7 +8424,10 @@ function renderEntTableBody(list){
               <td class="mono">${formatCA(c.ca)}</td>
               <td><span class="badge potentiel-${c.potentiel}">${c.potentiel}</span></td>
               <td><span class="sector-dot" style="background:${PRESTATAIRE_COLORS[c.prestataire]}"></span>${c.prestataire}<div class="ent-region">${esc(c.partenaire)}</div></td>
-              <td><button class="btn small" onclick="event.stopPropagation();viewCompanyInline('${c.id}')">Ouvrir →</button></td>
+              <td style="display:flex;gap:6px;justify-content:flex-end;">
+                ${companyTasks(c.id).length===0 ? `<button class="btn small" style="color:var(--brand-orange-dark,#B85405);" title="Créer une tâche pour cette entreprise" onclick="event.stopPropagation();quickAddTaskFromList('${c.id}')">+ Tâche</button>` : ''}
+                <button class="btn small" onclick="event.stopPropagation();viewCompanyInline('${c.id}')">Ouvrir →</button>
+              </td>
             </tr>`).join('')}
           ${!list.length ? `<tr><td colspan="9"><div class="empty-queue" style="padding:16px;">Aucune entreprise ne correspond à ces filtres.</div></td></tr>` : ''}
           ${remaining > 0 ? `<tr><td colspan="9" style="text-align:center;padding:12px;"><button class="btn small" onclick="state.entVisibleCount=(state.entVisibleCount||200)+200;updateEntTableOnly()">Afficher ${Math.min(remaining,200)} de plus (${remaining} restantes)</button></td></tr>` : ''}`;
