@@ -134,9 +134,16 @@
     border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.18);
     padding:6px;color:var(--ink-900);max-height:400px;overflow:auto;
   }
-  .search-results .sr-item{padding:8px 10px;border-radius:6px;font-size:13px;display:flex;flex-direction:column;gap:1px;}
+  .search-results .sr-item{padding:8px 10px;border-radius:6px;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
   .search-results .sr-item:hover{background:var(--panel-2);cursor:pointer;}
+  .search-results .sr-info{display:flex;flex-direction:column;gap:1px;min-width:0;}
   .search-results .sr-tag{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-500);}
+  .search-results .sr-noaction{font-size:10.5px;font-weight:600;color:var(--brand-orange-dark,#B85405);background:var(--brand-orange-wash,#FCE8D6);border-radius:4px;padding:1px 5px;margin-left:4px;}
+  .search-results .sr-add-task{
+    flex-shrink:0;font-size:11.5px;font-weight:600;color:var(--brand-orange-dark,#B85405);
+    background:var(--brand-orange-wash,#FCE8D6);border:none;border-radius:6px;padding:5px 9px;cursor:pointer;
+  }
+  .search-results .sr-add-task:hover{background:var(--brand-orange,#ED6D05);color:#fff;}
   .search-results .sr-empty{padding:14px;font-size:13px;color:var(--ink-500);}
 
   /* ===== Suggestion d'adresse (fiche entreprise) ===== */
@@ -885,7 +892,7 @@ function relLabel(dstr){
 }
 
 /* ---------------------------- DATA ---------------------------- */
-const APP_VERSION = '2026-09-30 · build d (tâches multiples par entreprise)';
+const APP_VERSION = '2026-09-30 · build e (recherche + action rapide)';
 console.log('SENGO OS — version', APP_VERSION);
 let DB = {
   companies: [
@@ -7070,7 +7077,11 @@ function renderSearchResultsOnly(){
       <div class="search-results">
         ${results.length ? results.map(r=>`
           <div class="sr-item" onmousedown="pickSearchResult(event,'${r.companyId}')" onclick="pickSearchResult(event,'${r.companyId}')">
-            <span>${esc(r.label)}</span><span class="sr-tag">${r.tag}</span>
+            <div class="sr-info">
+              <span>${esc(r.label)}${r.tag==='Entreprise' && r.openTaskCount===0 ? ' <span class="sr-noaction">sans action</span>' : ''}</span>
+              <span class="sr-tag">${r.tag}</span>
+            </div>
+            <button class="sr-add-task" title="Créer une tâche pour cette entreprise, sans quitter la recherche" onmousedown="pickSearchResultAddTask(event,'${r.companyId}')" onclick="pickSearchResultAddTask(event,'${r.companyId}')">+ Tâche</button>
           </div>`).join('') : `<div class="sr-empty">Aucun résultat pour « ${esc(state.searchQuery)} »</div>`}
       </div>`;
     if(existing) existing.outerHTML = html; else wrap.insertAdjacentHTML('beforeend', html);
@@ -7124,6 +7135,19 @@ function onSearchKeydown(ev){
     state.searchQuery = ''; searchExpanded = false; render();
   }
 }
+function pickSearchResultAddTask(ev, companyId){
+  // Raccourci pour retrouver rapidement une entreprise sans action en cours et lui en créer une
+  // tout de suite, sans passer d'abord par sa fiche complète : même garde anti-double-déclenchement
+  // que pickSearchResult, plus un arrêt de la propagation pour ne pas aussi activer la ligne entière.
+  ev.stopPropagation();
+  if(ev.type === 'mousedown') ev.preventDefault();
+  const now = Date.now();
+  if(now - __lastSearchPickAddTaskAt < 700) return;
+  __lastSearchPickAddTaskAt = now;
+  runSearchAction(companyId);
+  toggleAddTask(companyId);
+}
+let __lastSearchPickAddTaskAt = 0;
 function runSearchAction(companyId){
   state.searchQuery = ''; // referme le menu de résultats une fois la sélection faite
   searchExpanded = false; // revient à l'icône seule — avec onmousedown+preventDefault, le champ
@@ -7136,7 +7160,7 @@ function searchResults(q){
   const Q = q.toLowerCase();
   const res = [];
   DB.companies.forEach(c=>{
-    if(c.nom.toLowerCase().includes(Q)) res.push({label:c.nom, tag:'Entreprise', companyId:c.id});
+    if(c.nom.toLowerCase().includes(Q)) res.push({label:c.nom, tag:'Entreprise', companyId:c.id, openTaskCount:companyTasks(c.id).length});
   });
   DB.contacts.forEach(k=>{
     const full = (k.prenom+' '+k.nom).toLowerCase();
@@ -7228,7 +7252,11 @@ function renderTopbar(){
       <div class="search-results">
         ${results.length ? results.map(r=>`
           <div class="sr-item" onmousedown="pickSearchResult(event,'${r.companyId}')" onclick="pickSearchResult(event,'${r.companyId}')">
-            <span>${esc(r.label)}</span><span class="sr-tag">${r.tag}</span>
+            <div class="sr-info">
+              <span>${esc(r.label)}${r.tag==='Entreprise' && r.openTaskCount===0 ? ' <span class="sr-noaction">sans action</span>' : ''}</span>
+              <span class="sr-tag">${r.tag}</span>
+            </div>
+            <button class="sr-add-task" title="Créer une tâche pour cette entreprise, sans quitter la recherche" onmousedown="pickSearchResultAddTask(event,'${r.companyId}')" onclick="pickSearchResultAddTask(event,'${r.companyId}')">+ Tâche</button>
           </div>`).join('') : `<div class="sr-empty">Aucun résultat pour « ${esc(state.searchQuery)} »</div>`}
       </div>` : ''}
       ` : ''}
